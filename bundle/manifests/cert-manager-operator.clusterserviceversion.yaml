@@ -638,7 +638,7 @@ spec:
                   value: 1.9.1
                 - name: OPERATOR_IMAGE_VERSION
                   value: 1.9.1
-                image: openshift.io/cert-manager-operator:latest
+                image: quay.io/swghosh/cert-manager-operator:v1.9.1
                 imagePullPolicy: Always
                 name: cert-manager-operator
                 resources: {}

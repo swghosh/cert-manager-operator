@@ -1,0 +1,8 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: cert-manager-operator-staging
+  namespace: openshift-marketplace
+spec:
+  sourceType: grpc
+  image: quay.io/swghosh/cert-manager-operator:v1.9.1-index
