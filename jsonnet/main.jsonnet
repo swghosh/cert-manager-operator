@@ -35,12 +35,12 @@ local processManifests(manifest) =
               // this path is unified with the upstream making the operator easier for ad-hoc testing (e.g. running operator against the upstream images).
               local cmd = '/app/cmd/' + manifest.metadata.labels['app.kubernetes.io/component'] + '/' + manifest.metadata.labels['app.kubernetes.io/component'],
               [if container.name == 'cert-manager' then 'command']: [cmd],
-              args: [
+              args: std.uniq([
                 if std.startsWith(arg, "--dynamic-serving-dns-names")
                 then "--dynamic-serving-dns-names=cert-manager-webhook,cert-manager-webhook." + targetOperandNamespace +",cert-manager-webhook." + targetOperandNamespace + ".svc"
                 else arg
                 for arg in super.args
-              ],
+              ]),
             }
             for container in super.containers
           ],
