@@ -2,6 +2,7 @@ package deployment
 
 import (
 	"fmt"
+	"os"
 
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/informers"
@@ -16,6 +17,8 @@ import (
 
 	"github.com/openshift/cert-manager-operator/pkg/operator/assets"
 	"github.com/openshift/cert-manager-operator/pkg/operator/operatorclient"
+
+	"k8s.io/cli-runtime/pkg/printers"
 )
 
 func newGenericDeploymentController(
@@ -47,5 +50,17 @@ func newGenericDeploymentController(
 			deployment = UnsupportedConfigOverrides(deployment, unsupportedExtensions)
 			return nil
 		},
+		saveDeploymentToFile,
 	)
+}
+
+func saveDeploymentToFile(_ *v1.OperatorSpec, deployment *appsv1.Deployment) error {
+	yamlPrinter := printers.YAMLPrinter{}
+	basedir := "/home/swghosh/Desktop/cert-manager-temp/010223"
+	yamlFile, err := os.Create(basedir + "/" + deployment.Name + ".yaml")
+	if err != nil {
+		return err
+	}
+	defer yamlFile.Close()
+	return yamlPrinter.PrintObj(deployment, yamlFile)
 }
