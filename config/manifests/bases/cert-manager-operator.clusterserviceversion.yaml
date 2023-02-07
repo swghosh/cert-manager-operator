@@ -7,8 +7,10 @@ metadata:
     categories: Security
     olm.skipRange: <1.10
     operatorframework.io/suggested-namespace: cert-manager-operator
+    operators.openshift.io/infrastructure-features: '["disconnected", "fips"]'
     operators.openshift.io/valid-subscription: '["OpenShift Container Platform", "OpenShift
       Platform Plus"]'
+    operators.operatorframework.io/internal-objects: ""
     operators.operatorframework.io/project_layout: unknown
     repository: https://github.com/openshift/cert-manager-operator
     support: Red Hat, Inc.
