@@ -36,11 +36,17 @@ func NewDefaultCertManagerController(operatorClient v1helpers.OperatorClient, ce
 }
 
 func (c *DefaultCertManagerController) sync(ctx context.Context, syncCtx factory.SyncContext) error {
-	_, _, _, err := c.operatorClient.GetOperatorState()
-	if apierrors.IsNotFound(err) {
-		syncCtx.Recorder().Eventf("StatusNotFound", "Creating \"cluster\" certmanager")
-		_, err = c.createDefaultCertManager(ctx)
+	operatorSpec, _, _, err := c.operatorClient.GetOperatorState()
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			syncCtx.Recorder().Eventf("StatusNotFound", "Creating \"cluster\" certmanager")
+			_, err = c.createDefaultCertManager(ctx)
+		}
+		return err
 	}
+
+	// Set the value of klog verbosity at runtime from spec.operatorLogLevel
+	err = setOperatorLogLevel(operatorSpec.OperatorLogLevel)
 	return err
 }
 
