@@ -48,5 +48,6 @@ func newGenericDeploymentController(
 		withUnsupportedArgsOverrideHook,
 		withProxyEnv,
 		withCAConfigMap(kubeInformersForTargetNamespace.Core().V1().ConfigMaps(), deployment, trustedCAConfigmapName),
+		withCloudCredentials(kubeInformersForTargetNamespace.Core().V1().Secrets(), deployment.Name),
 	)
 }
