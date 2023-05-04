@@ -1,0 +1,141 @@
+package deployment
+
+import (
+	"os"
+
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	coreinformersv1 "k8s.io/client-go/informers/core/v1"
+	"k8s.io/utils/pointer"
+
+	configv1 "github.com/openshift/api/config/v1"
+	configinformersv1 "github.com/openshift/client-go/config/informers/externalversions/config/v1"
+
+	v1 "github.com/openshift/api/operator/v1"
+	"github.com/openshift/cert-manager-operator/pkg/operator/operatorclient"
+)
+
+type cloudCredentialsConfig struct {
+	mountDirectory string
+	mountFilename  string
+
+	secretKey string
+}
+
+const (
+	// credentials for AWS
+	awsCredentialsDir       = "/.aws"
+	awsCredentialsFileName  = "credentials"
+	awsCredentialsSecretKey = "credentials"
+
+	// credentials for GCP
+	gcpCredentialsDir       = "/.config/gcloud"
+	gcpCredentialsFileName  = "application_default_credentials.json"
+	gcpCredentialsSecretKey = "service_account.json"
+
+	// cloudCredentialsVolumeName is the volume name for mounting
+	// service account (gcp) or credentials (aws) file
+	cloudCredentialsVolumeName = "cloud-credentials"
+
+	// boundSA is the openshift bound service account
+	// containing the sts token
+	boundSATokenVolumeName = "bound-sa-token"
+	boundSATokenDir        = "/var/run/secrets/openshift/serviceaccount"
+	boundSAAudience        = "openshift"
+	boundSAPath            = "token"
+	boundSAExpirySec       = 3600
+)
+
+// currently supported cloud platforms for ambient credentials are: AWS, GCP
+var cloudCredentialConfigs = map[configv1.PlatformType]cloudCredentialsConfig{
+	configv1.AWSPlatformType: {
+		mountDirectory: awsCredentialsDir,
+		mountFilename:  awsCredentialsFileName,
+
+		secretKey: awsCredentialsSecretKey,
+	},
+	configv1.GCPPlatformType: {
+		mountDirectory: gcpCredentialsDir,
+		mountFilename:  gcpCredentialsFileName,
+
+		secretKey: gcpCredentialsSecretKey,
+	},
+}
+
+func withCloudCredentials(secretsInformer coreinformersv1.SecretInformer, infraInformer configinformersv1.InfrastructureInformer, deploymentName string) func(operatorSpec *v1.OperatorSpec, deployment *appsv1.Deployment) error {
+	// cloud credentials is only required for the controller deployment,
+	// other deployments should be left untouched
+	if deploymentName != "cert-manager" {
+		return func(operatorSpec *v1.OperatorSpec, deployment *appsv1.Deployment) error {
+			return nil
+		}
+	}
+
+	return func(operatorSpec *v1.OperatorSpec, deployment *appsv1.Deployment) error {
+		volumes := []corev1.Volume{{
+			Name: boundSATokenVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					DefaultMode: pointer.Int32(420),
+					Sources: []corev1.VolumeProjection{{
+						ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+							Audience:          boundSAAudience,
+							ExpirationSeconds: pointer.Int64(boundSAExpirySec),
+							Path:              boundSAPath,
+						}},
+					},
+				},
+			},
+		}}
+		volumeMounts := []corev1.VolumeMount{{
+			Name:      boundSATokenVolumeName,
+			MountPath: boundSATokenDir,
+			ReadOnly:  true,
+		}}
+
+		if secretName := os.Getenv("CLOUD_SECRET_NAME"); secretName != "" {
+			_, err := secretsInformer.Lister().Secrets(operatorclient.TargetNamespace).Get(secretName)
+			if err != nil {
+				return err
+			}
+
+			infra, err := infraInformer.Lister().Get("cluster")
+			if err != nil {
+				return err
+			}
+
+			cloudProvider := infra.Status.PlatformStatus.Type
+			cloudCredentialConfig, ok := cloudCredentialConfigs[cloudProvider]
+			if ok {
+				// supported cloud platform for mounting secrets found
+				volumes = append(volumes, corev1.Volume{
+					Name: cloudCredentialsVolumeName,
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: secretName,
+							Items: []corev1.KeyToPath{{
+								Key:  cloudCredentialConfig.secretKey,
+								Path: cloudCredentialConfig.mountFilename,
+							}},
+						},
+					},
+				})
+				volumeMounts = append(volumeMounts, corev1.VolumeMount{
+					Name:      cloudCredentialsVolumeName,
+					MountPath: cloudCredentialConfig.mountDirectory,
+				})
+			}
+		}
+
+		deployment.Spec.Template.Spec.Volumes = append(
+			deployment.Spec.Template.Spec.Volumes,
+			volumes...,
+		)
+		deployment.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			deployment.Spec.Template.Spec.Containers[0].VolumeMounts,
+			volumeMounts...,
+		)
+
+		return nil
+	}
+}
