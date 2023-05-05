@@ -53,7 +53,7 @@ func NewCertManagerCAInjectorDeploymentController(operatorClient v1helpers.Opera
 	kubeClient kubernetes.Interface,
 	kubeInformersForTargetNamespace informers.SharedInformerFactory,
 	eventsRecorder events.Recorder, targetVersion string, versionRecorder status.VersionGetter,
-	trustedCAConfigmapName string,
+	trustedCAConfigmapName, cloudCredentialsSecretName string,
 ) factory.Controller {
 	return newGenericDeploymentController(
 		certManagerCAInjectorDeploymentControllerName,
@@ -67,5 +67,6 @@ func NewCertManagerCAInjectorDeploymentController(operatorClient v1helpers.Opera
 		eventsRecorder,
 		versionRecorder,
 		trustedCAConfigmapName,
+		cloudCredentialsSecretName,
 	)
 }

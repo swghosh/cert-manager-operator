@@ -6,6 +6,7 @@ import (
 
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog/v2"
 
 	configv1client "github.com/openshift/client-go/config/clientset/versioned"
 	configinformers "github.com/openshift/client-go/config/informers/externalversions"
@@ -28,7 +29,14 @@ const (
 // provided as a runtime arg.
 var TrustedCAConfigMapName string
 
+// CloudSecretName is the name of the cloud secret to be
+// used in ambient credentials mode, and is provided as a runtime arg
+var CloudCredentialSecret string
+
 func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error {
+	klog.V(2).InfoS("cloud credential secret = %q", CloudCredentialSecret)
+	klog.V(2).InfoS("trusted ca config map = %q", TrustedCAConfigMapName)
+
 	kubeClient, err := kubernetes.NewForConfig(cc.ProtoKubeConfig)
 	if err != nil {
 		return err
@@ -60,7 +68,6 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	kubeInformersForNamespaces := v1helpers.NewKubeInformersForNamespaces(kubeClient,
 		"",
 		"kube-system",
-		"cert-manager",
 		operatorclient.TargetNamespace,
 	)
 
@@ -68,12 +75,13 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	if err != nil {
 		return err
 	}
-	configInformers := configinformers.NewSharedInformerFactory(configClient, resyncInterval)
+	configInformers := configinformers.NewSharedInformerFactory(configClient, 1*time.Second)
 
+	ts := kubeInformersForNamespaces.InformersFor(operatorclient.TargetNamespace)
 	certManagerControllerSet := deployment.NewCertManagerControllerSet(
 		kubeClient,
 		kubeInformersForNamespaces,
-		kubeInformersForNamespaces.InformersFor(operatorclient.TargetNamespace),
+		ts,
 		configInformers,
 		operatorClient,
 		certManagerInformers,
@@ -82,6 +90,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		status.VersionForOperandFromEnv(),
 		versionRecorder,
 		TrustedCAConfigMapName,
+		CloudCredentialSecret,
 	)
 	controllersToStart := certManagerControllerSet.ToArray()
 
@@ -93,13 +102,27 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 
 	controllersToStart = append(controllersToStart, defaultCertManagerController)
 
-	for _, informer := range []interface{ Start(<-chan struct{}) }{
-		certManagerInformers,
-		kubeInformersForNamespaces,
-		configInformers,
-	} {
-		informer.Start(ctx.Done())
-	}
+	// for _, informer := range []interface {
+	// 	Start(<-chan struct{})
+	// 	WaitForCacheSync(<-chan struct{})
+	// }{
+	// 	// certManagerInformers,
+	// 	kubeInformersForNamespaces,
+	// 	// configInformers,
+	// } {
+	// 	informer.Start(ctx.Done())
+	// 	// informer.WaitForCacheSync(ctx.Done())
+	// }
+	certManagerInformers.Start(ctx.Done())
+	certManagerInformers.WaitForCacheSync(ctx.Done())
+
+	kubeInformersForNamespaces.Start(ctx.Done())
+
+	ts.Start(ctx.Done())
+	ts.WaitForCacheSync(ctx.Done())
+
+	configInformers.Start(ctx.Done())
+	configInformers.WaitForCacheSync(ctx.Done())
 
 	for _, controller := range controllersToStart {
 		go controller.Run(ctx, 1)

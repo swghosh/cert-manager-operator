@@ -1,18 +1,19 @@
 package deployment
 
 import (
-	"os"
+	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	coreinformersv1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/utils/pointer"
 
 	configv1 "github.com/openshift/api/config/v1"
+	"github.com/openshift/cert-manager-operator/pkg/operator/operatorclient"
 	configinformersv1 "github.com/openshift/client-go/config/informers/externalversions/config/v1"
 
 	v1 "github.com/openshift/api/operator/v1"
-	"github.com/openshift/cert-manager-operator/pkg/operator/operatorclient"
 )
 
 type cloudCredentialsConfig struct {
@@ -46,7 +47,7 @@ const (
 	boundSAExpirySec       = 3600
 )
 
-// currently supported cloud platforms for ambient credentials are: AWS, GCP
+// currently supported cloud platforms for ambient credentialsare: AWS, GCP
 var cloudCredentialConfigs = map[configv1.PlatformType]cloudCredentialsConfig{
 	configv1.AWSPlatformType: {
 		mountDirectory: awsCredentialsDir,
@@ -62,7 +63,7 @@ var cloudCredentialConfigs = map[configv1.PlatformType]cloudCredentialsConfig{
 	},
 }
 
-func withCloudCredentials(secretsInformer coreinformersv1.SecretInformer, infraInformer configinformersv1.InfrastructureInformer, deploymentName string) func(operatorSpec *v1.OperatorSpec, deployment *appsv1.Deployment) error {
+func withCloudCredentials(secretsInformer coreinformersv1.SecretInformer, infraInformer configinformersv1.InfrastructureInformer, deploymentName, secretName string) func(operatorSpec *v1.OperatorSpec, deployment *appsv1.Deployment) error {
 	// cloud credentials is only required for the controller deployment,
 	// other deployments should be left untouched
 	if deploymentName != "cert-manager" {
@@ -93,9 +94,19 @@ func withCloudCredentials(secretsInformer coreinformersv1.SecretInformer, infraI
 			ReadOnly:  true,
 		}}
 
-		if secretName := os.Getenv("CLOUD_SECRET_NAME"); secretName != "" {
-			_, err := secretsInformer.Lister().Secrets(operatorclient.TargetNamespace).Get(secretName)
+		if len(secretName) > 0 {
+			lister := secretsInformer.Lister()
+			secretsLister := lister.Secrets(operatorclient.TargetNamespace)
+			_, err := secretsLister.Get(secretName)
+			// s, err := secretsInformer.Lister().Secrets(operatorclient.TargetNamespace).List(labels.Everything())
+			// klog.V(2).Info(s)
 			if err != nil {
+				return err
+			}
+
+			if err != nil && apierrors.IsNotFound(err) {
+				return fmt.Errorf("(Retrying) cloud secret %q doesn't exist due to %v", secretName, err)
+			} else if err != nil {
 				return err
 			}
 
@@ -105,8 +116,7 @@ func withCloudCredentials(secretsInformer coreinformersv1.SecretInformer, infraI
 			}
 
 			cloudProvider := infra.Status.PlatformStatus.Type
-			cloudCredentialConfig, ok := cloudCredentialConfigs[cloudProvider]
-			if ok {
+			if cloudCredentialConfig, ok := cloudCredentialConfigs[cloudProvider]; ok {
 				// supported cloud platform for mounting secrets found
 				volumes = append(volumes, corev1.Volume{
 					Name: cloudCredentialsVolumeName,

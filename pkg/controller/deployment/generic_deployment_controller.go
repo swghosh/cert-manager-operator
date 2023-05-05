@@ -26,6 +26,7 @@ func newGenericDeploymentController(
 	eventsRecorder events.Recorder,
 	versionRecorder status.VersionGetter,
 	trustedCAConfigmapName string,
+	cloucloudCredentialsSecretName string,
 ) factory.Controller {
 	deployment := resourceread.ReadDeploymentV1OrDie(assets.MustAsset(deploymentFile))
 	return deploymentcontroller.NewDeploymentController(
@@ -50,6 +51,6 @@ func newGenericDeploymentController(
 		withUnsupportedArgsOverrideHook,
 		withProxyEnv,
 		withCAConfigMap(kubeInformersForTargetNamespace.Core().V1().ConfigMaps(), deployment, trustedCAConfigmapName),
-		withCloudCredentials(kubeInformersForTargetNamespace.Core().V1().Secrets(), configInformer.Config().V1().Infrastructures(), deployment.Name),
+		withCloudCredentials(kubeInformersForTargetNamespace.Core().V1().Secrets(), configInformer.Config().V1().Infrastructures(), deployment.Name, cloucloudCredentialsSecretName),
 	)
 }

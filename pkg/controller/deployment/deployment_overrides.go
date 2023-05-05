@@ -107,6 +107,10 @@ func withProxyEnv(operatorSpec *v1.OperatorSpec, deployment *appsv1.Deployment) 
 func withCAConfigMap(configmapinformer coreinformersv1.ConfigMapInformer, deployment *appsv1.Deployment, trustedCAConfigmapName string) func(operatorSpec *v1.OperatorSpec, deployment *appsv1.Deployment) error {
 	return func(operatorSpec *v1.OperatorSpec, deployment *appsv1.Deployment) error {
 
+		if !configmapinformer.Informer().HasSynced() {
+			return fmt.Errorf("config map informer has not been synced")
+		}
+
 		if len(trustedCAConfigmapName) == 0 {
 			return nil
 		}

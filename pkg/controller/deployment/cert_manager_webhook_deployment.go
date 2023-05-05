@@ -55,7 +55,7 @@ func NewCertManagerWebhookDeploymentController(operatorClient v1helpers.Operator
 	configInformers configinformers.SharedInformerFactory,
 	kubeclient kubernetes.Interface,
 	kubeInformersForTargetNamespace informers.SharedInformerFactory,
-	eventsRecorder events.Recorder, targetVersion string, versionRecorder status.VersionGetter, trustedCAConfigmapName string) factory.Controller {
+	eventsRecorder events.Recorder, targetVersion string, versionRecorder status.VersionGetter, trustedCAConfigmapName, cloudCredentialsSecretName string) factory.Controller {
 	return newGenericDeploymentController(
 		certManagerWebhookDeploymentControllerName,
 		targetVersion,
@@ -68,5 +68,6 @@ func NewCertManagerWebhookDeploymentController(operatorClient v1helpers.Operator
 		eventsRecorder,
 		versionRecorder,
 		trustedCAConfigmapName,
+		cloudCredentialsSecretName,
 	)
 }
