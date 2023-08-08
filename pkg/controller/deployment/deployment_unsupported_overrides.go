@@ -16,17 +16,17 @@ func unsupportedConfigOverrides(deployment *appsv1.Deployment, unsupportedConfig
 	if unsupportedConfigOverrides == nil {
 		return deployment
 	}
-	if len(unsupportedConfigOverrides.Webhook.Args) > 0 && deployment.Name == certmanagerWebhookDeployment {
+	if len(unsupportedConfigOverrides.Webhook.Args) > 0 && deployment.Name == CertmanagerWebhookDeployment {
 		deployment.Spec.Template.Spec.Containers[0].Args = mergeContainerArgs(
 			deployment.Spec.Template.Spec.Containers[0].Args,
 			unsupportedConfigOverrides.Webhook.Args)
 	}
-	if len(unsupportedConfigOverrides.CAInjector.Args) > 0 && deployment.Name == certmanagerCAinjectorDeployment {
+	if len(unsupportedConfigOverrides.CAInjector.Args) > 0 && deployment.Name == CertmanagerCAinjectorDeployment {
 		deployment.Spec.Template.Spec.Containers[0].Args = mergeContainerArgs(
 			deployment.Spec.Template.Spec.Containers[0].Args,
 			unsupportedConfigOverrides.CAInjector.Args)
 	}
-	if len(unsupportedConfigOverrides.Controller.Args) > 0 && deployment.Name == certmanagerControllerDeployment {
+	if len(unsupportedConfigOverrides.Controller.Args) > 0 && deployment.Name == CertmanagerControllerDeployment {
 		deployment.Spec.Template.Spec.Containers[0].Args = mergeContainerArgs(
 			deployment.Spec.Template.Spec.Containers[0].Args,
 			unsupportedConfigOverrides.Controller.Args)

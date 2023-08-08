@@ -32,7 +32,7 @@ const (
 func withCloudCredentials(secretsInformer coreinformersv1.SecretInformer, infraInformer configinformersv1.InfrastructureInformer, deploymentName, secretName string) func(operatorSpec *v1.OperatorSpec, deployment *appsv1.Deployment) error {
 	// cloud credentials is only required for the controller deployment,
 	// other deployments should be left untouched
-	if deploymentName != certmanagerControllerDeployment {
+	if deploymentName != CertmanagerControllerDeployment {
 		return func(operatorSpec *v1.OperatorSpec, deployment *appsv1.Deployment) error {
 			return nil
 		}

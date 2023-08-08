@@ -18,7 +18,7 @@ import (
 
 const (
 	certManagerCAInjectorStaticResourcesControllerName = operatorName + "-cainjector-static-resources-"
-	certManagerCAInjectorDeploymentControllerName      = operatorName + "-cainjector-deployment"
+	CertManagerCAInjectorDeploymentControllerName      = operatorName + "-cainjector-deployment"
 	certManagerCAInjectorDeploymentFile                = "cert-manager-deployment/cainjector/cert-manager-cainjector-deployment.yaml"
 )
 
@@ -56,7 +56,7 @@ func NewCertManagerCAInjectorDeploymentController(operatorClient v1helpers.Opera
 	trustedCAConfigmapName, cloudCredentialsSecretName string,
 ) factory.Controller {
 	return newGenericDeploymentController(
-		certManagerCAInjectorDeploymentControllerName,
+		CertManagerCAInjectorDeploymentControllerName,
 		targetVersion,
 		certManagerCAInjectorDeploymentFile,
 		operatorClient,

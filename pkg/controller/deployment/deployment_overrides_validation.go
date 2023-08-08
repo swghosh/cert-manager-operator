@@ -74,17 +74,17 @@ func withContainerArgsValidateHook(certmanagerinformer certmanagerinformer.CertM
 
 		argMap := make(map[string]string, 0)
 		switch deploymentName {
-		case certmanagerControllerDeployment:
+		case CertmanagerControllerDeployment:
 			if certmanager.Spec.ControllerConfig != nil {
 				parseArgMap(argMap, certmanager.Spec.ControllerConfig.OverrideArgs)
 				return validateArgs(argMap, supportedCertManagerArgs)
 			}
-		case certmanagerWebhookDeployment:
+		case CertmanagerWebhookDeployment:
 			if certmanager.Spec.WebhookConfig != nil {
 				parseArgMap(argMap, certmanager.Spec.WebhookConfig.OverrideArgs)
 				return validateArgs(argMap, supportedCertManagerWebhookArgs)
 			}
-		case certmanagerCAinjectorDeployment:
+		case CertmanagerCAinjectorDeployment:
 			if certmanager.Spec.CAInjectorConfig != nil {
 				parseArgMap(argMap, certmanager.Spec.CAInjectorConfig.OverrideArgs)
 				return validateArgs(argMap, supportedCertManageCainjectorArgs)
@@ -124,17 +124,17 @@ func withContainerEnvValidateHook(certmanagerinformer certmanagerinformer.CertMa
 
 		envMap := make(map[string]corev1.EnvVar, 0)
 		switch deploymentName {
-		case certmanagerControllerDeployment:
+		case CertmanagerControllerDeployment:
 			if certmanager.Spec.ControllerConfig != nil {
 				parseEnvMap(envMap, certmanager.Spec.ControllerConfig.OverrideEnv)
 				return validateEnv(envMap, supportedCertManagerEnv)
 			}
-		case certmanagerWebhookDeployment:
+		case CertmanagerWebhookDeployment:
 			if certmanager.Spec.WebhookConfig != nil {
 				parseEnvMap(envMap, certmanager.Spec.WebhookConfig.OverrideEnv)
 				return validateEnv(envMap, supportedCertManagerWebhookEnv)
 			}
-		case certmanagerCAinjectorDeployment:
+		case CertmanagerCAinjectorDeployment:
 			if certmanager.Spec.CAInjectorConfig != nil {
 				parseEnvMap(envMap, certmanager.Spec.CAInjectorConfig.OverrideEnv)
 				return validateEnv(envMap, supportedCertManageCainjectorEnv)
@@ -173,15 +173,15 @@ func withPodLabelsValidateHook(certmanagerinformer certmanagerinformer.CertManag
 		}
 
 		switch deploymentName {
-		case certmanagerControllerDeployment:
+		case CertmanagerControllerDeployment:
 			if certmanager.Spec.ControllerConfig != nil {
 				return validateLabels(certmanager.Spec.ControllerConfig.OverrideLabels, supportedCertManagerLabelKeys)
 			}
-		case certmanagerWebhookDeployment:
+		case CertmanagerWebhookDeployment:
 			if certmanager.Spec.WebhookConfig != nil {
 				return validateLabels(certmanager.Spec.WebhookConfig.OverrideLabels, supportedCertManagerWebhookLabelKeys)
 			}
-		case certmanagerCAinjectorDeployment:
+		case CertmanagerCAinjectorDeployment:
 			if certmanager.Spec.CAInjectorConfig != nil {
 				return validateLabels(certmanager.Spec.CAInjectorConfig.OverrideLabels, supportedCertManagerCainjectorLabelKeys)
 			}

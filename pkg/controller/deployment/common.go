@@ -5,7 +5,7 @@ const (
 	operandNamePrefix = ""
 	conditionsPrefix  = "CertManager"
 
-	certmanagerControllerDeployment = "cert-manager"
-	certmanagerWebhookDeployment    = "cert-manager-webhook"
-	certmanagerCAinjectorDeployment = "cert-manager-cainjector"
+	CertmanagerControllerDeployment = "cert-manager"
+	CertmanagerWebhookDeployment    = "cert-manager-webhook"
+	CertmanagerCAinjectorDeployment = "cert-manager-cainjector"
 )

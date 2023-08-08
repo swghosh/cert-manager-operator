@@ -64,7 +64,7 @@ func withOperandImageOverrideHook(operatorSpec *v1.OperatorSpec, deployment *app
 	}
 
 	// replace acme-http01-solver-image image from env variables
-	if len(deployment.Spec.Template.Spec.Containers) == 1 && deployment.Name == certmanagerControllerDeployment {
+	if len(deployment.Spec.Template.Spec.Containers) == 1 && deployment.Name == CertmanagerControllerDeployment {
 		deployment.Spec.Template.Spec.Containers[0].Args = mergeContainerArgs(deployment.Spec.Template.Spec.Containers[0].Args,
 			[]string{fmt.Sprintf("--acme-http01-solver-image=%s", certManagerImage(upstreamACMESolverImage))})
 	}

@@ -85,15 +85,15 @@ func getOverrideArgsFor(certmanagerinformer certmanagerinformer.CertManagerInfor
 	}
 
 	switch deploymentName {
-	case certmanagerControllerDeployment:
+	case CertmanagerControllerDeployment:
 		if certmanager.Spec.ControllerConfig != nil {
 			return certmanager.Spec.ControllerConfig.OverrideArgs, nil
 		}
-	case certmanagerWebhookDeployment:
+	case CertmanagerWebhookDeployment:
 		if certmanager.Spec.WebhookConfig != nil {
 			return certmanager.Spec.WebhookConfig.OverrideArgs, nil
 		}
-	case certmanagerCAinjectorDeployment:
+	case CertmanagerCAinjectorDeployment:
 		if certmanager.Spec.CAInjectorConfig != nil {
 			return certmanager.Spec.CAInjectorConfig.OverrideArgs, nil
 		}
@@ -112,15 +112,15 @@ func getOverrideEnvFor(certmanagerinformer certmanagerinformer.CertManagerInform
 	}
 
 	switch deploymentName {
-	case certmanagerControllerDeployment:
+	case CertmanagerControllerDeployment:
 		if certmanager.Spec.ControllerConfig != nil {
 			return certmanager.Spec.ControllerConfig.OverrideEnv, nil
 		}
-	case certmanagerWebhookDeployment:
+	case CertmanagerWebhookDeployment:
 		if certmanager.Spec.WebhookConfig != nil {
 			return certmanager.Spec.WebhookConfig.OverrideEnv, nil
 		}
-	case certmanagerCAinjectorDeployment:
+	case CertmanagerCAinjectorDeployment:
 		if certmanager.Spec.CAInjectorConfig != nil {
 			return certmanager.Spec.CAInjectorConfig.OverrideEnv, nil
 		}
@@ -139,15 +139,15 @@ func getOverridePodLabelsFor(certmanagerinformer certmanagerinformer.CertManager
 	}
 
 	switch deploymentName {
-	case certmanagerControllerDeployment:
+	case CertmanagerControllerDeployment:
 		if certmanager.Spec.ControllerConfig != nil {
 			return certmanager.Spec.ControllerConfig.OverrideLabels, nil
 		}
-	case certmanagerWebhookDeployment:
+	case CertmanagerWebhookDeployment:
 		if certmanager.Spec.WebhookConfig != nil {
 			return certmanager.Spec.WebhookConfig.OverrideLabels, nil
 		}
-	case certmanagerCAinjectorDeployment:
+	case CertmanagerCAinjectorDeployment:
 		if certmanager.Spec.CAInjectorConfig != nil {
 			return certmanager.Spec.CAInjectorConfig.OverrideLabels, nil
 		}

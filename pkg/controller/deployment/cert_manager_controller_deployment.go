@@ -18,7 +18,7 @@ import (
 
 const (
 	certManagerControllerStaticResourcesControllerName = operatorName + "-controller-static-resources-"
-	certManagerControllerDeploymentControllerName      = operatorName + "-controller-deployment"
+	CertManagerControllerDeploymentControllerName      = operatorName + "-controller-deployment"
 	certManagerControllerDeploymentFile                = "cert-manager-deployment/controller/cert-manager-deployment.yaml"
 )
 
@@ -75,7 +75,7 @@ func NewCertManagerControllerDeploymentController(operatorClient v1helpers.Opera
 	kubeInformersForTargetNamespace informers.SharedInformerFactory,
 	eventsRecorder events.Recorder, targetVersion string, versionRecorder status.VersionGetter, trustedCAConfigmapName, cloudCredentialsSecretName string) factory.Controller {
 	return newGenericDeploymentController(
-		certManagerControllerDeploymentControllerName,
+		CertManagerControllerDeploymentControllerName,
 		targetVersion,
 		certManagerControllerDeploymentFile,
 		operatorClient,
