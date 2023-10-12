@@ -11,6 +11,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/require"
 
 	certmanagerclientset "github.com/cert-manager/cert-manager/pkg/client/clientset/versioned"
 	opv1 "github.com/openshift/api/operator/v1"
@@ -18,6 +19,7 @@ import (
 	"github.com/openshift/cert-manager-operator/test/library"
 	configv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
 
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -114,3 +116,18 @@ var _ = BeforeSuite(func() {
 	certmanagerClient, err = certmanagerclientset.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())
 })
+
+func TestCertOmitEmptyBehaviour(t *testing.T) {
+	cfg, err := config.GetConfig()
+	require.NoError(t, err)
+
+	certmanagerClient, err := certmanagerclientset.NewForConfig(cfg)
+	require.NoError(t, err)
+
+	cert, err := certmanagerClient.CertmanagerV1().Certificates("cert-manager-issue").Get(context.TODO(), "server-tls", v1.GetOptions{})
+	copiedCert := cert.DeepCopy()
+	copiedCert.Spec.IsCA = false
+
+	_, err = certmanagerClient.CertmanagerV1().Certificates("cert-manager-issue").Update(context.TODO(), copiedCert, v1.UpdateOptions{})
+	require.NoError(t, err)
+}
