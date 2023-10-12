@@ -39,7 +39,7 @@ func newGenericDeploymentController(
 		[]factory.Informer{
 			kubeInformersForTargetNamespace.Core().V1().ConfigMaps().Informer(),
 			kubeInformersForTargetNamespace.Core().V1().Secrets().Informer(),
-			infraInformers.Config().V1().Infrastructures().Informer(),
+			// infraInformers.Config().V1().Infrastructures().Informer(),
 		},
 		[]deploymentcontroller.ManifestHookFunc{},
 		withOperandImageOverrideHook,
@@ -56,6 +56,6 @@ func newGenericDeploymentController(
 		withProxyEnv,
 		withCAConfigMap(kubeInformersForTargetNamespace.Core().V1().ConfigMaps(), deployment, trustedCAConfigmapName),
 		withSABoundToken,
-		withCloudCredentials(kubeInformersForTargetNamespace.Core().V1().Secrets(), infraInformers.Config().V1().Infrastructures(), deployment.Name, cloucloudCredentialsSecretName),
+		// withCloudCredentials(kubeInformersForTargetNamespace.Core().V1().Secrets(), infraInformers.Config().V1().Infrastructures(), deployment.Name, cloucloudCredentialsSecretName),
 	)
 }

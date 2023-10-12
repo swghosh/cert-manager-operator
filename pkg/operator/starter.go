@@ -7,8 +7,6 @@ import (
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/kubernetes"
 
-	configv1client "github.com/openshift/client-go/config/clientset/versioned"
-	configinformers "github.com/openshift/client-go/config/informers/externalversions"
 	"github.com/openshift/library-go/pkg/controller/controllercmd"
 	"github.com/openshift/library-go/pkg/operator/resource/resourceapply"
 	"github.com/openshift/library-go/pkg/operator/status"
@@ -67,17 +65,18 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 		operatorclient.TargetNamespace,
 	)
 
-	configClient, err := configv1client.NewForConfig(cc.KubeConfig)
-	if err != nil {
-		return err
-	}
-	infraInformers := configinformers.NewSharedInformerFactory(configClient, resyncInterval)
+	// configClient, err := configv1client.NewForConfig(cc.KubeConfig)
+	// if err != nil {
+	// 	return err
+	// }
+	// infraInformers := configinformers.NewSharedInformerFactory(configClient, resyncInterval)
 
 	certManagerControllerSet := deployment.NewCertManagerControllerSet(
 		kubeClient,
 		kubeInformersForNamespaces,
 		kubeInformersForNamespaces.InformersFor(operatorclient.TargetNamespace),
-		infraInformers,
+		// infraInformers,
+		nil,
 		operatorClient,
 		certManagerInformers,
 		resourceapply.NewKubeClientHolder(kubeClient).WithAPIExtensionsClient(apiExtensionsClient),
@@ -100,7 +99,7 @@ func RunOperator(ctx context.Context, cc *controllercmd.ControllerContext) error
 	for _, informer := range []interface{ Start(<-chan struct{}) }{
 		certManagerInformers,
 		kubeInformersForNamespaces,
-		infraInformers,
+		// infraInformers,
 	} {
 		informer.Start(ctx.Done())
 	}
