@@ -252,7 +252,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-          image: quay.io/jetstack/cert-manager-cainjector:v1.13.5
+          image: quay.io/swghos/cert-manager:v1.13.5-17-gd9235ef134b120
           imagePullPolicy: IfNotPresent
           name: cert-manager-cainjector
           securityContext:
@@ -1394,7 +1394,7 @@ spec:
             - --v=2
             - --cluster-resource-namespace=$(POD_NAMESPACE)
             - --leader-election-namespace=kube-system
-            - --acme-http01-solver-image=quay.io/jetstack/cert-manager-acmesolver:v1.13.5
+            - --acme-http01-solver-image=quay.io/swghos/cert-manager:acmesolver-amd64-v1.13.5-17-gd9235ef134b120
             - --max-concurrent-challenges=60
           command:
             - /app/cmd/controller/controller
@@ -1403,7 +1403,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-          image: quay.io/jetstack/cert-manager-controller:v1.13.5
+          image: quay.io/swghos/cert-manager:v1.13.5-17-gd9235ef134b120
           imagePullPolicy: IfNotPresent
           name: cert-manager-controller
           ports:
@@ -1773,7 +1773,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-          image: quay.io/jetstack/cert-manager-webhook:v1.13.5
+          image: quay.io/swghos/cert-manager:v1.13.5-17-gd9235ef134b120
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3

@@ -39,7 +39,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-          image: quay.io/jetstack/cert-manager-webhook:v1.13.5
+          image: quay.io/swghos/cert-manager:v1.13.5-17-gd9235ef134b120
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 3
