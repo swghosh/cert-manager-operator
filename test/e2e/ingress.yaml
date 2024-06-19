@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    acme.cert-manager.io/http01-ingress-class: openshift-default
+    cert-manager.io/issuer: openssl-bootstrap-ca-issuer
+  creationTimestamp: null
+  name: python-web-copy
+  namespace: sandbox
+spec:
+  ingressClassName: openshift-default
+  rules:
+  - host: python-web-service-copy.apps.sgoodwin071824.devcluster.openshift.com
+    http:
+      paths:
+      - backend:
+          service:
+            name: python-web
+            port:
+              name: http
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - python-web-service-copy.apps.sgoodwin071824.devcluster.openshift.com
+    secretName: ingress-cert
+status:
+  loadBalancer: {}
