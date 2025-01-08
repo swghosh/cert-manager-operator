@@ -22,7 +22,6 @@ import (
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 
 	v1alpha1 "github.com/openshift/cert-manager-operator/api/operator/v1alpha1"
-	"github.com/openshift/cert-manager-operator/pkg/controller/istiocsr"
 	"github.com/openshift/cert-manager-operator/pkg/version"
 )
 
@@ -50,7 +49,6 @@ type Manager struct {
 
 // New creates a new manager.
 func New() (*Manager, error) {
-	setupLog.Info("setting up operator manager", "controller", istiocsr.ControllerName)
 	setupLog.Info("controller", "version", version.Get())
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -72,14 +70,6 @@ func New() (*Manager, error) {
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		return nil, fmt.Errorf("failed to set up ready check: %w", err)
 	}
-
-	r, err := istiocsr.New(mgr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create %s reconciler object: %w", istiocsr.ControllerName, err)
-	}
-	if err := r.SetupWithManager(mgr); err != nil {
-		return nil, fmt.Errorf("failed to create %s controller: %w", istiocsr.ControllerName, err)
-	}
 	// +kubebuilder:scaffold:builder
 
 	return &Manager{
@@ -89,6 +79,7 @@ func New() (*Manager, error) {
 
 // Start starts the operator synchronously until a message is received from ctx.
 func (mgr *Manager) Start(ctx context.Context) error {
+	// TODO: can we pass this to ManagedController.SetupWithManager?
 	mgr.manager.GetEventRecorderFor("cert-manager-istio-csr-controller").Event(&v1alpha1.IstioCSR{}, corev1.EventTypeNormal, "ControllerStarted", "controller is starting")
 	return mgr.manager.Start(ctx)
 }
