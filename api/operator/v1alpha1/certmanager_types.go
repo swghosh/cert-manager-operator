@@ -141,14 +141,13 @@ type Features struct {
 	// enabling customers to test functionality and provide feedback during the development process.
 	//
 	// +kubebuilder:validation:XValidation:rule="oldSelf.size() != 0 ? oldSelf.all(e, self.exists(f, f == e)) : true",message="a tech preview feature once enabled, cannot be disabled."
-	// +kubebuilder:validation:XValidation:rule="self.all(e, self.filter(x, x == e).size() == 1)",message="tech preview features must not contain duplicate values."
 	// +kubebuilder:validation:Required
 	// +required
 	TechPreview TechPreview `json:"techPreview"`
 }
 
 // TechPreview contains the list of enabled experimental features.
-// +listType=atomic
+// +listType=set
 // +kubebuilder:validation:MaxItems=64
 type TechPreview []FeatureName
 
