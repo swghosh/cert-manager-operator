@@ -5,7 +5,7 @@ set -e
 VERSION="1.25.1"
 
 OUTPUT_PATH=${1:-./bin/operator-sdk}
-VERIFY=${2:-yes}
+VERIFY=${2:-no}
 
 GOOS=$(go env GOOS)
 GOARCH=$(go env GOARCH)
@@ -25,11 +25,6 @@ case ${GOOS} in
     exit 1
     ;;
 esac
-
-if [ "$GOARCH" != "amd64" ]; then
-  echo "Unsupported architecture $GOARCH"
-  exit 1
-fi
 
 command -v curl &> /dev/null || { echo "can't find curl command" && exit 1; }
 command -v sha256sum &> /dev/null || { echo "can't find sha256sum command" && exit 1; }

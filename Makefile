@@ -82,7 +82,7 @@ BIN_DIR=$(shell pwd)/bin
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
-CONTAINER_ENGINE ?= docker
+CONTAINER_ENGINE ?= podman
 CONTAINER_PUSH_ARGS ?= $(if $(filter ${CONTAINER_ENGINE}, docker), , --tls-verify=${TLS_VERIFY})
 TLS_VERIFY ?= true
 CONTAINER_IMAGE_NAME ?= registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.22-openshift-4.17
@@ -190,7 +190,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run $(PACKAGE)
 
 image-build: ## Build container image with the operator.
-	$(CONTAINER_ENGINE) build -t ${IMG} .
+	$(CONTAINER_ENGINE) build --platform linux/amd64 -t ${IMG} .
 
 image-push: ## Push container image with the operator.
 	$(CONTAINER_ENGINE) push ${IMG} ${CONTAINER_PUSH_ARGS}
@@ -213,7 +213,7 @@ bundle: $(OPERATOR_SDK_BIN) manifests
 
 .PHONY: bundle-image-build
 bundle-image-build: bundle
-	$(CONTAINER_ENGINE) build -t ${BUNDLE_IMG} -f bundle.Dockerfile .
+	$(CONTAINER_ENGINE) build --platform linux/amd64 -t ${BUNDLE_IMG} -f bundle.Dockerfile .
 
 .PHONY: bundle-image-push
 bundle-image-push:
