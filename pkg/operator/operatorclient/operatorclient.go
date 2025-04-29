@@ -4,32 +4,29 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	applyconfig "github.com/openshift/cert-manager-operator/pkg/operator/applyconfigurations/operator/v1alpha1"
-	applyoperatorv1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
 
-	//v1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
-
-	"github.com/openshift/library-go/pkg/apiserver/jsonpatch"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/clock"
 
 	operatorv1 "github.com/openshift/api/operator/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/cache"
+	applyoperatorv1 "github.com/openshift/client-go/operator/applyconfigurations/operator/v1"
+	"github.com/openshift/library-go/pkg/apiserver/jsonpatch"
+	"github.com/openshift/library-go/pkg/operator/v1helpers"
 
 	"github.com/openshift/cert-manager-operator/api/operator/v1alpha1"
+	applyconfig "github.com/openshift/cert-manager-operator/pkg/operator/applyconfigurations/operator/v1alpha1"
 	operatorconfigclient "github.com/openshift/cert-manager-operator/pkg/operator/clientset/versioned/typed/operator/v1alpha1"
 	operatorclientinformers "github.com/openshift/cert-manager-operator/pkg/operator/informers/externalversions"
-
-	"github.com/openshift/library-go/pkg/operator/v1helpers"
 )
 
 type OperatorClient struct {
 	Informers operatorclientinformers.SharedInformerFactory
 	Client    operatorconfigclient.CertManagersGetter
-	clock     clock.PassiveClock
+	Clock     clock.PassiveClock
 }
 
 var _ v1helpers.OperatorClient = &OperatorClient{}
@@ -78,40 +75,72 @@ func (c OperatorClient) ApplyOperatorSpec(ctx context.Context, fieldManager stri
 	return nil
 }
 
-func (c OperatorClient) ApplyOperatorStatus(ctx context.Context, fieldManager string, applyConfiguration *applyoperatorv1.OperatorStatusApplyConfiguration) (err error) {
-	if applyConfiguration == nil {
+func (c OperatorClient) ApplyOperatorStatus(ctx context.Context, fieldManager string, desiredConfiguration *applyoperatorv1.OperatorStatusApplyConfiguration) (err error) {
+	if desiredConfiguration == nil {
 		return fmt.Errorf("applyConfiguration must have a value")
 	}
 
 	desired := applyconfig.CertManager("cluster")
-	desired.Status = &applyconfig.CertManagerStatusApplyConfiguration{}
-
-	desired.Status.Conditions = applyConfiguration.Conditions
-	desired.Status.ObservedGeneration = applyConfiguration.ObservedGeneration
-	desired.Status.LatestAvailableRevision = applyConfiguration.LatestAvailableRevision
-	desired.Status.ReadyReplicas = applyConfiguration.ReadyReplicas
-	desired.Status.Version = applyConfiguration.Version
 	instance, err := c.Client.CertManagers().Get(ctx, "cluster", metav1.GetOptions{})
 	switch {
+
+	// no certmanager.operator/cluster resource found, proceed with apply by setting Conditions[*].LastTransitionTime
 	case apierrors.IsNotFound(err):
-		// do nothing and proceed with the apply
-		v1helpers.SetApplyConditionsLastTransitionTime(c.clock, &applyConfiguration.Conditions, nil)
-		ts := c.clock.Now()
-		for i := range desired.Status.Conditions {
-			if desired.Status.Conditions[i].LastTransitionTime == nil {
-				desired.Status.Conditions[i].LastTransitionTime = &metav1.Time{Time: ts}
+		v1helpers.SetApplyConditionsLastTransitionTime(c.Clock, &desiredConfiguration.Conditions, nil)
+		desiredStatus := &applyconfig.CertManagerStatusApplyConfiguration{
+			OperatorStatusApplyConfiguration: *desiredConfiguration,
+		}
+		desired.WithStatus(desiredStatus)
+
+	// certmanager.operator/cluster resource found, but some other error from client get
+	case err != nil:
+		return fmt.Errorf("unable to get operator configuration: %w", err)
+
+	// no error during client get
+	default:
+		previous, err := applyconfig.ExtractCertManagerStatus(instance, fieldManager)
+		if err != nil {
+			return fmt.Errorf("unable to extract operator configuration: %w", err)
+		}
+
+		operatorStatus := &applyoperatorv1.OperatorStatusApplyConfiguration{}
+		if previous.Status != nil {
+			jsonBytes, err := json.Marshal(previous.Status)
+			if err != nil {
+				return fmt.Errorf("unable to serialize operator configuration: %w", err)
+			}
+			if err := json.Unmarshal(jsonBytes, operatorStatus); err != nil {
+				return fmt.Errorf("unable to deserialize operator configuration: %w", err)
 			}
 		}
 
-	case err != nil:
-		return fmt.Errorf("unable to get operator configuration: %w", err)
-	default:
+		switch {
 
-		original := &applyconfig.CertManagerApplyConfiguration{}
-		original.WithName(instance.Name)
+		// the conditions from the applied status is not nil AND existing operator status is also not nil
+		case desiredConfiguration.Conditions != nil && operatorStatus != nil:
+			v1helpers.SetApplyConditionsLastTransitionTime(c.Clock, &desiredConfiguration.Conditions, operatorStatus.Conditions)
 
-		original.WithKind(instance.Kind)
-		original.WithAPIVersion(instance.APIVersion)
+		// the conditions from the applied status is not nil,
+		// existing operator status is NOT nil
+		case desiredConfiguration.Conditions != nil && operatorStatus == nil:
+			v1helpers.SetApplyConditionsLastTransitionTime(c.Clock, &desiredConfiguration.Conditions, nil)
+		}
+
+		v1helpers.CanonicalizeOperatorStatus(desiredConfiguration)
+		v1helpers.CanonicalizeOperatorStatus(operatorStatus)
+
+		original := applyconfig.CertManager("cluster")
+		if operatorStatus != nil {
+			originalStatus := &applyconfig.CertManagerStatusApplyConfiguration{
+				OperatorStatusApplyConfiguration: *operatorStatus,
+			}
+			original.WithStatus(originalStatus)
+		}
+
+		desiredStatus := &applyconfig.CertManagerStatusApplyConfiguration{
+			OperatorStatusApplyConfiguration: *desiredConfiguration,
+		}
+		desired.WithStatus(desiredStatus)
 
 		if equality.Semantic.DeepEqual(original, desired) {
 			return nil
