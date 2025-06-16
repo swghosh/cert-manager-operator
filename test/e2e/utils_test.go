@@ -11,7 +11,10 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
+	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	cmv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
@@ -729,4 +732,36 @@ func pollTillDeploymentAvailable(ctx context.Context, clientSet *kubernetes.Clie
 	})
 
 	return err
+}
+
+func httpsGetCall(url string) error {
+	// Create a new HTTP client
+	client := &http.Client{}
+
+	// Create a new GET request
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+
+	// Send the request
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Check if the status code is 200 OK
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("http status code %v", resp.StatusCode)
+	}
+
+	return nil
+}
+
+func TestHTTPSGet(t *testing.T) {
+	err := httpsGetCall("https://expired.badssl.com/")
+	if !strings.Contains(err.Error(), "failed to verify certificate") {
+		t.Fatalf("expired SSL test failed, this should pass under all circumstance")
+	}
 }
