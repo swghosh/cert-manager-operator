@@ -11,7 +11,7 @@ metadata:
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
-    features.operators.openshift.io/disconnected: "false"
+    features.operators.openshift.io/disconnected: "true"
     features.operators.openshift.io/fips-compliant: "true"
     features.operators.openshift.io/proxy-aware: "true"
     features.operators.openshift.io/tls-profiles: "false"
@@ -27,7 +27,6 @@ metadata:
       for additional steps.
     operatorframework.io/cluster-monitoring: "true"
     operatorframework.io/suggested-namespace: cert-manager-operator
-    operators.openshift.io/infrastructure-features: '["proxy-aware"]'
     operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift
       Container Platform", "OpenShift Platform Plus"]'
     operators.operatorframework.io/project_layout: unknown
@@ -39,7 +38,7 @@ metadata:
     operatorframework.io/arch.ppc64le: supported
     operatorframework.io/arch.s390x: supported
     operatorframework.io/os.linux: supported
-  name: cert-manager-operator.v1.15.0
+  name: cert-manager-operator.v1.16.0
   namespace: cert-manager-operator
 spec:
   apiservicedefinitions: {}
@@ -69,7 +68,7 @@ spec:
       name: certmanagers.operator.openshift.io
       version: v1alpha1
   description: |
-    The cert-manager Operator for Red Hat OpenShift provides seamless support for [cert-manager v1.15.5](https://github.com/cert-manager/cert-manager/tree/v1.15.2), which automates certificate management.
+    The cert-manager Operator for Red Hat OpenShift provides seamless support for [cert-manager v1.16.4](https://github.com/cert-manager/cert-manager/tree/v1.16.4), which automates certificate management.
     For more information, see the [cert-manager Operator for Red Hat OpenShift documentation](https://docs.openshift.com/container-platform/latest/security/cert_manager_operator/index.html).
   displayName: cert-manager Operator for Red Hat OpenShift
   icon:
@@ -102,7 +101,7 @@ spec:
   - email: support@redhat.com
     name: Red Hat Support
   maturity: stable
-  minKubeVersion: 1.25.0
+  minKubeVersion: 1.27.0
   provider:
     name: Red Hat
   replaces: cert-manager-operator.v1.15.1
