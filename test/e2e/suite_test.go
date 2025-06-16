@@ -17,6 +17,7 @@ import (
 	certmanoperatorclient "github.com/openshift/cert-manager-operator/pkg/operator/clientset/versioned"
 	"github.com/openshift/cert-manager-operator/test/library"
 	configv1 "github.com/openshift/client-go/config/clientset/versioned/typed/config/v1"
+	routev1 "github.com/openshift/client-go/route/clientset/versioned/typed/route/v1"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -44,6 +45,7 @@ var (
 	loader library.DynamicResourceLoader
 
 	configClient              *configv1.ConfigV1Client
+	routeClient               *routev1.RouteV1Client
 	certmanageroperatorclient *certmanoperatorclient.Clientset
 	certmanagerClient         *certmanagerclientset.Clientset
 
@@ -104,6 +106,10 @@ var _ = BeforeSuite(func() {
 
 	By("creating openshift config client")
 	configClient, err = configv1.NewForConfig(cfg)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("creating openshift route client")
+	routeClient, err = routev1.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())
 
 	By("creating cert-manager client")
