@@ -1,0 +1,40 @@
+schema: openspec-agile-workflow
+
+context: |
+  GS Spec Kit agile workflow — gated spec-driven development.
+  Stages: validation → specs → repo-assessment + constitution → plan → tasks → implementation.
+  Primary input at /opsx:new: Jira ticket key ONLY (stored in inputs/jira.yaml).
+  Target GitHub repository: NOT required at /opsx:new — required before repo-assessment artifact.
+  Optional anytime: AGENTS.md from the target repo.
+  Fork URL: NOT required until Implementation (/opsx:apply) — stored as
+  fork_repo_url in inputs/jira.yaml.
+  Approve each artifact before proceeding to the next stage. Implementation uses
+  per-phase approval gates (/opsx:apply), then pushes a draft PR to the user's fork.
+
+rules:
+  validation:
+    - Read jira_key from inputs/jira.yaml; use inputs/jira-spec.md as spec source
+    - Obtain Jira ticket content via Jira MCP or ask the user to paste into inputs/jira-spec.md
+    - Score completeness (60%) and quality (40%); do not invent requirements
+    - Emit validation.json matching the validation.md template schema
+  specs:
+    - Derive from the same Jira ticket referenced in inputs/jira.yaml
+    - No implementation details; max 3 [NEEDS CLARIFICATION] markers
+    - User stories with Given/When/Then; FR-xxx and SC-xxx identifiers
+  repo-assessment:
+    - Before creating repo-assessment.md, ensure target_repo is set in inputs/jira.yaml (ask user once if empty; see schema target_repo)
+    - Fact-based inventory only; cite repo evidence for every target file
+  constitution:
+    - Every principle must cite observable repo evidence
+  plan:
+    - All sections §0–§8; each phase uses Goal, Dependencies, Target files, Verification hooks
+  tasks:
+    - Use §0–§5 structure; prefer multipass (skeleton → payloads → orchestration) for large backlogs
+    - Task IDs: T<n>_<m>; pair implementation tasks with verification when constitution requires
+  implementation:
+    - Follow the `implementation` artifact instruction in schema.yaml exactly
+    - Ask user for fork_repo_url at stage start; persist to inputs/jira.yaml
+    - Clone fork, create feature branch, apply FILE OPERATIONS to fork working copy (not upstream)
+    - Phase-by-phase execution with per-phase user approval gate
+    - After all phases: commit, push feature branch, open draft PR on fork (head = feature branch, base = master/main)
+    - Close with implementation-report.md, implementation-checklist.md, optional adrs.md

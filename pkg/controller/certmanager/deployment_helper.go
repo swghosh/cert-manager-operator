@@ -293,3 +293,39 @@ func getOverrideSchedulingFor(certmanagerinformer certmanagerinformer.CertManage
 	}
 	return v1alpha1.CertManagerScheduling{}, nil
 }
+
+// getPerformanceArgsFor is a helper function that returns performance tuning
+// arguments for the cert-manager controller based on the CertManager CR spec.
+// This only applies to the controller deployment; returns nil for other deployments.
+func getPerformanceArgsFor(certmanagerinformer certmanagerinformer.CertManagerInformer, deploymentName string) ([]string, error) {
+	if deploymentName != certmanagerControllerDeployment {
+		return nil, nil
+	}
+
+	certmanager, err := certmanagerinformer.Lister().Get("cluster")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get certmanager %q due to %w", "cluster", err)
+	}
+
+	if certmanager.Spec.ControllerConfig == nil {
+		return nil, nil
+	}
+
+	config := certmanager.Spec.ControllerConfig
+	var args []string
+
+	if config.MaxConcurrentChallenges != nil {
+		args = append(args, fmt.Sprintf("--max-concurrent-challenges=%d", *config.MaxConcurrentChallenges))
+	}
+	if config.ConcurrentWorkers != nil {
+		args = append(args, fmt.Sprintf("--concurrent-workers=%d", *config.ConcurrentWorkers))
+	}
+	if config.KubeAPIQPS != nil {
+		args = append(args, fmt.Sprintf("--kube-api-qps=%s", *config.KubeAPIQPS))
+	}
+	if config.KubeAPIBurst != nil {
+		args = append(args, fmt.Sprintf("--kube-api-burst=%d", *config.KubeAPIBurst))
+	}
+
+	return args, nil
+}

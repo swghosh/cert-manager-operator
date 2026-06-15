@@ -1,0 +1,924 @@
+name: openspec-agile-workflow
+version: 1
+description: >-
+  Gated spec-driven workflow: Spec Understanding → Repo Understanding → Planning →
+  Task Creation → Implementation. Produces validation.json, specs.md,
+  repo-assessment.md, constitution.md, plan.md, tasks.md, and (during
+  implementation) implementation-report.md, implementation-checklist.md, and
+  optional adrs.md. Templates from templates/.
+
+templates_dir: templates
+
+# ---------------------------------------------------------------------------
+# AGENTS.md — when required, where to look, what to do if missing
+# ---------------------------------------------------------------------------
+agents_md:
+  description: 
+    SME-defined execution agent roster and routing rules from the target repository.
+    Used for AgentRoutingMode (constitution), phase capability mapping (plan), and
+    Assigned Agent values (tasks). Not used during Spec Understanding.
+  used_in_stages:
+    - id: repo-understanding
+      required: false
+      when: repo-assessment and constitution authoring
+      effect: >-
+        If found, constitution sets AgentRoutingMode PROVIDED and summarizes agent IDs.
+        If missing, AgentRoutingMode is PROVISIONAL.
+    - id: planning
+      required: false
+      when: plan.md authoring (§0–§8)
+      effect: >-
+        Map implementation phases to concrete agent IDs from AGENTS.md when provided;
+        otherwise use provisional taxonomy and label it in plan.md.
+    - id: task-creation
+      required: false
+      when: tasks.md authoring (§3 manifest, §4 payloads)
+      effect: >-
+        Assigned Agent must match AGENTS.md IDs when AgentRoutingMode is PROVIDED;
+        otherwise use provisional agent IDs from constitution/tasks template.
+    - id: implementation
+      required: false
+      when: phase-by-phase code generation
+      effect: >-
+        Respect Assigned Agent routing and per-task payloads from tasks.md §4;
+        follow constitution.md conventions for every file mutation.
+  not_used_in_stages:
+    - spec-understanding
+  lookup_order:
+    - "{target_repo}/AGENTS.md"
+    - "{target_repo}/agents.md"
+    - "openspec/changes/<change>/inputs/AGENTS.md"
+  when_missing: >-
+    Before starting repo-assessment, plan, or tasks — check the target repository
+    (from inputs/jira.yaml target_repo) for AGENTS.md or agents.md. If neither
+    exists and the user has not already supplied one under
+    openspec/changes/<change>/inputs/AGENTS.md, ask the user once to provide
+    AGENTS.md (paste content, repo path, or file in the change inputs folder).
+    Do not invent agent IDs. If the user declines or defers, proceed with
+    AgentRoutingMode PROVISIONAL and document that in constitution.md, plan.md,
+    and tasks.md.
+
+# ---------------------------------------------------------------------------
+# target_repo — upstream GitHub repo for assessment and planning
+# ---------------------------------------------------------------------------
+target_repo:
+  description: >-
+    Upstream GitHub repository URL used for repo-assessment, constitution, plan,
+    and tasks. Distinct from fork_repo_url (user's fork for implementation).
+  collected_at: repo-understanding
+  stored_in: openspec/changes/<change>/inputs/jira.yaml
+  field: target_repo
+  not_required_at:
+    - opsx-new
+  when_missing: >-
+    Before creating repo-assessment.md (Repo Understanding stage / artifact
+    repo-assessment), read inputs/jira.yaml for target_repo. If absent or empty,
+    ask the user once: "Provide the URL of the target GitHub repository (e.g.
+    https://github.com/org/repo)." Persist target_repo to inputs/jira.yaml.
+    Do not start repo-assessment or constitution until the URL is recorded.
+    Verify the repository is accessible (clone, fetch, or GitHub MCP) before
+    writing repo-assessment.md.
+  usage: >-
+    Reference only for planning and assessment. Implementation FILE OPERATIONS
+    apply to fork_repo_url (/opsx:apply), not target_repo, unless the user
+    explicitly directs otherwise.
+
+# ---------------------------------------------------------------------------
+# fork_repo — user's fork for implementation and draft PR
+# ---------------------------------------------------------------------------
+fork_repo:
+  description: >-
+    User's forked GitHub repository where implementation code is written, committed,
+    pushed, and opened as a draft pull request. Distinct from target_repo (upstream)
+    used for repo-assessment and planning context.
+  collected_at: implementation
+  stored_in: openspec/changes/<change>/inputs/jira.yaml
+  field: fork_repo_url
+  not_required_at:
+    - opsx-new
+    - opsx-continue
+  when_missing: >-
+    At the start of the Implementation Stage (/opsx:apply), BEFORE any clone
+    activity or FILE OPERATIONS, read inputs/jira.yaml for fork_repo_url. If absent,
+    ask the user once: "Provide the URL of your forked repository (e.g.
+    https://github.com/<you>/cert-manager-operator)." Persist fork_repo_url to
+    inputs/jira.yaml. Do not start code generation until the URL is recorded and
+    the fork is cloned or verified accessible.
+  working_copy: >-
+    Clone or reuse a local checkout of fork_repo_url. All FILE OPERATIONS apply
+    to this working copy. target_repo in inputs/jira.yaml remains the upstream
+    reference from repo-assessment; implementation writes only to the fork unless
+    the user explicitly directs otherwise.
+  feature_branch:
+    when: >-
+      Immediately after fork_repo_url is recorded and the fork is cloned or
+      verified — BEFORE any FILE OPERATIONS or implementation commits.
+    steps:
+      - Checkout the fork's default branch (master or main) and pull latest
+      - Create a feature branch from that default branch
+      - All implementation commits MUST go on this branch only
+    branch_naming: >-
+      Use branch naming from constitution.md when specified; otherwise
+      feature/<jira_key_lowercase>-<change_slug> (e.g. cm-830-trust-manager).
+    do_not:
+      - Do not implement directly on the fork default branch
+      - Do not create a separate baseline branch (e.g. cm-830-baseline) to
+        fabricate a PR diff
+      - If the fork default branch already contains the changes, report that
+        to the user instead of inventing a second base branch
+  draft_pr:
+    when: >-
+      After Task Creation is complete, all implementation phases are user-approved,
+      and closing artifacts (implementation-report.md, implementation-checklist.md)
+      are written.
+    steps:
+      - Confirm all commits are on the feature branch created at fork setup
+      - Stage and commit any remaining changes with a descriptive message referencing jira_key
+      - Push the feature branch to fork_repo_url
+      - Open a draft pull request on the user's fork (fork_repo_url)
+    pr_target: >-
+      Draft PR on fork_repo_url only: head = feature branch (with all
+      implementation commits), base = fork default branch (master or main).
+      Do not open PRs against upstream target_repo unless the user explicitly
+      requests it. Use GitHub CLI (`gh pr create --draft`) or GitHub MCP.
+      Include the PR URL in the final summary and implementation-report.md.
+
+# ---------------------------------------------------------------------------
+# Workflow stages (source of truth)
+# ---------------------------------------------------------------------------
+workflow:
+  - id: spec-understanding
+    name: Spec Understanding Stage
+    description: >-
+      Agent reads the specification from Jira (enhancement repo ticket).
+      Specification Validation is evaluated by the user before proceeding.
+    inputs:
+      - Jira ticket with specification document
+    outputs:
+      - validation.json
+      - specs.md
+    gate: user_approval
+
+  - id: repo-understanding
+    name: Repo Understanding Stage
+    description: >-
+      Agent reads and contextualizes the target GitHub repository using the
+      approved spec and Agents.md. Repo assessment and constitution are
+      evaluated by the user before proceeding.
+    inputs:
+      - specs.md
+      - GitHub repository (inputs/jira.yaml target_repo — required; see schema target_repo)
+      - AGENTS.md (optional — ask user if missing; see agents_md.when_missing)
+      - Functional SME context
+    outputs:
+      - repo-assessment.md
+      - constitution.md
+    gate: user_approval
+
+  - id: planning
+    name: Planning Stage
+    description: >-
+      Technical planning using approved repo assessment, constitution, and specs.
+      Planning approach is evaluated by the user before plan.md is finalized.
+    inputs:
+      - specs.md
+      - repo-assessment.md
+      - constitution.md
+      - AGENTS.md (optional — ask user if missing; see agents_md.when_missing)
+      - validation.json
+    outputs:
+      - plan.md
+    gate: user_approval
+
+  - id: task-creation
+    name: Task Creation Stage
+    description: >-
+      Decompose the approved plan into an execution backlog (tasks.md) with
+      dependency DAG, agent routing, per-task payloads, and orchestration notes.
+      Evaluated by the user before implementation.
+    inputs:
+      - specs.md
+      - constitution.md
+      - repo-assessment.md
+      - plan.md
+      - AGENTS.md (optional — ask user if missing; see agents_md.when_missing)
+    outputs:
+      - tasks.md
+    gate: user_approval
+
+  - id: implementation
+    name: Implementation Stage
+    description: >-
+      Final pipeline stage. Begins after Task Creation (tasks.md) is approved.
+      The agent asks the user for their forked repository URL, clones it, and
+      drives incremental code generation into that fork using tasks.md payloads.
+      Structured FILE OPERATIONS (CREATE / EDIT / DELETE) are applied phase-by-phase
+      with verification tests and user approval after each phase. When all phases
+      are complete, changes are committed, pushed to the fork, and opened as a
+      draft PR on the fork. Closes with implementation-report.md,
+      implementation-checklist.md, and optional adrs.md.
+    inputs:
+      - tasks.md (required — Task Creation complete)
+      - constitution.md (required)
+      - specs.md (required)
+      - plan.md (required)
+      - repo-assessment.md (optional — improves target-file accuracy)
+      - target repository (upstream reference — inputs/jira.yaml target_repo)
+      - forked repository URL (required at stage start — inputs/jira.yaml fork_repo_url)
+    outputs:
+      - code changes in user's fork
+      - draft pull request on fork_repo_url
+      - implementation-report.md
+      - implementation-checklist.md
+      - adrs.md (optional — only when deviations are logged)
+    gate: user_approval_per_phase
+
+# ---------------------------------------------------------------------------
+# Artifacts (ordered by workflow)
+# ---------------------------------------------------------------------------
+artifacts:
+  - id: validation
+    workflow_stage: spec-understanding
+    generates: validation.json
+    format: json
+    description: Specification Validation — quality gate on the Jira spec before spec authoring
+    template: validation.md
+    instruction: |
+      You are the "Specification Validator": a quality gate for software specs before engineering.
+
+      ## Mission
+      Reduce rework by catching ambiguous, incomplete, inconsistent, or un-testable requirements early.
+      Make gaps explicit as questions and actionable edits — do not invent product behavior.
+
+      ## Process
+      1. Read the specification from the Jira ticket (provided in the user message).
+      2. Apply the validation template rubric (completeness 60%, quality 40%).
+      3. Emit ONE valid JSON object matching the template schema.
+      4. Set overall_status:
+         - PASS: overall_score >= pass_threshold AND no blockers
+         - NEEDS_REVISION: score below threshold OR non-fatal gaps
+         - BLOCKED: severe contradictions — halt pipeline
+
+      ## Gate (Spec Understanding Stage)
+      Present validation summary to the user for evaluation.
+      - PASS or approved NEEDS_REVISION → proceed to specs.md authoring.
+      - BLOCKED → stop; do not offer proceed.
+
+      Do not fabricate repositories, APIs, behaviors, or dependencies not stated in the spec.
+    gate:
+      type: threshold
+      evaluated_by: user
+      pass_status: PASS
+      blocked_status: BLOCKED
+      revision_status: NEEDS_REVISION
+      default_threshold: 80
+    requires: []
+
+  - id: specs
+    workflow_stage: spec-understanding
+    generates: specs.md
+    format: markdown
+    description: User Approved Specs — feature specification from the validated Jira ticket
+    template: spec.md
+    instruction: |
+      Transform the Jira specification into a user-approved specs.md artifact.
+
+      ## Process
+      1. Read validation.json if available; address missing_elements as assumptions.
+      2. Follow spec.md template for structure.
+      3. Produce user stories (P1/P2/P3) with Given/When/Then acceptance scenarios.
+      4. Derive functional requirements (FR-001…), success criteria (SC-001…), assumptions.
+      5. No implementation details (languages, frameworks, file paths).
+      6. Maximum 3 [NEEDS CLARIFICATION] markers.
+
+      ## APPROVAL GATE
+      After writing specs.md:
+      1. SUMMARIZE: stories, requirements, success criteria, assumptions.
+      2. ASK: "Do you approve? (Approve / Reject with feedback)"
+      3. ON REJECT: Revise every point raised. Rewrite. Ask again.
+      4. ON APPROVE: Unlock Repo Understanding Stage.
+    gate:
+      type: approval
+      evaluated_by: user
+    requires:
+      - validation
+
+  - id: repo-assessment
+    workflow_stage: repo-understanding
+    co_generated_with:
+      - constitution
+    generates: repo-assessment.md
+    format: markdown
+    description: Repo Assessment Report — grounded engineering inventory for planning
+    template: repo-assessment.md
+    instruction: |
+      Produce a Repo Assessment Report from the approved spec and repository analysis.
+
+      ## Inputs
+      - User Approved specs.md
+      - GitHub repository (tree, key files, git metadata)
+      - AGENTS.md when available (see schema agents_md — ask user if not in repo)
+      - Functional SME context when provided
+
+      ## Process
+      0. Resolve target_repo (REQUIRED — see schema target_repo): read
+         inputs/jira.yaml. If target_repo is absent or empty, ask the user once,
+         persist to jira.yaml, and verify the repository is accessible. Do not
+         proceed until recorded.
+      1. Resolve AGENTS.md: check target repo and change inputs/; if absent, ask the user
+         once to provide AGENTS.md before continuing (or proceed PROVISIONAL if declined).
+      2. Read and contextualize the repository; cross-reference with specs.md.
+      3. Follow repo-assessment.md template for all required sections.
+      4. Document target files, reusable assets, guardrails, and risks with evidence.
+      5. Fact-based inventory only — no governance principles (those go in constitution.md).
+
+      Co-generated with constitution.md; both evaluated together by the user.
+
+      ## APPROVAL GATE
+      1. SUMMARIZE: target files, reusable assets, guardrails, top risks.
+      2. ASK: "Do you approve repo-assessment.md and constitution.md?"
+      3. ON REJECT: Revise both artifacts. Ask again.
+      4. ON APPROVE: Unlock Planning Stage.
+    gate:
+      type: approval
+      evaluated_by: user
+      joint_with:
+        - constitution
+    requires:
+      - specs
+
+  - id: constitution
+    workflow_stage: repo-understanding
+    co_generated_with:
+      - repo-assessment
+    generates: constitution.md
+    format: markdown
+    description: Project constitution — repo-grounded principles and governance for planning
+    template: constitution.md
+    instruction: |
+      Derive constitution.md from repository conventions and the approved spec.
+
+      ## Process
+      0. Confirm target_repo is set in inputs/jira.yaml (see schema target_repo).
+         If missing, halt and resolve before constitution authoring.
+      1. Resolve AGENTS.md: if not found in target repo or change inputs/, ask the user
+         once to provide AGENTS.md (see schema agents_md.when_missing).
+      2. Read repository analysis and specs.md.
+      3. Follow constitution.md template for structure.
+      4. Every principle must cite observable repo evidence.
+      5. Set AgentRoutingMode PROVIDED if AGENTS.md exists; otherwise PROVISIONAL.
+      6. No file inventories or risk analysis — those belong in repo-assessment.md.
+
+      Co-generated with repo-assessment.md; joint user approval gate.
+
+      ## APPROVAL GATE
+      See repo-assessment artifact.
+    gate:
+      type: approval
+      evaluated_by: user
+      joint_with:
+        - repo-assessment
+    requires:
+      - specs
+
+  - id: plan
+    workflow_stage: planning
+    generates: plan.md
+    format: markdown
+    description: Technical Implementation Plan — architectural blueprint (sections 0–8)
+    template: plan.md
+    inputs:
+      required:
+        - specs.md
+        - constitution.md
+        - repo-assessment.md
+      optional:
+        - AGENTS.md
+        - agents.md
+        - validation.json
+    instruction: |
+      Create plan.md — the Technical Implementation Plan for the feature.
+
+      ## Input precedence (conflicts)
+      1. constitution.md (non-negotiable guardrails)
+      2. specs.md (validated feature requirements)
+      3. repo-assessment.md (repo facts, target files, reuse mandates)
+      4. AGENTS.md (optional — agent routing)
+      5. validation.json (optional — Stage 0 gaps)
+
+      ## Process
+      0. Resolve AGENTS.md: if not found in target repo or change inputs/, ask the user
+         once to provide AGENTS.md before planning (see schema agents_md.when_missing).
+      1. Read all inputs and plan.md template (§0–§8 output schema).
+      2. Produce plan.md with all sections §0 through §8 in full.
+      3. §1 MUST include a repo-grounded reality check citing repo-assessment.
+      4. Each implementation phase MUST use the phase template (Goal, Dependencies,
+         Target files, Required capabilities, Verification hooks).
+      5. Do NOT create tasks, tickets, or code — planning only.
+
+      ## APPROVAL GATE
+      After writing plan.md:
+      1. SUMMARIZE: phase count (### Phase headings), top risks, open questions.
+      2. ASK: "Do you approve plan.md? (Approve / Reject with feedback)"
+      3. ON REJECT: Inject revision_feedback and regenerate full plan.md. Ask again.
+      4. ON APPROVE: Unlock Task Creation Stage.
+    gate:
+      type: approval
+      evaluated_by: user
+    requires:
+      - specs
+      - repo-assessment
+      - constitution
+
+  - id: tasks
+    workflow_stage: task-creation
+    generates: tasks.md
+    format: markdown
+    description: Execution backlog — dependency DAG, agent routing, payloads, orchestration notes
+    template: tasks.md
+    template_modes_dir: tasks-modes
+    inputs:
+      required:
+        - specs.md
+        - constitution.md
+        - repo-assessment.md
+        - plan.md
+      optional:
+        - AGENTS.md
+        - agents.md
+    instruction: |
+      Create tasks.md — an Execution Backlog for downstream code generation.
+
+      You are the Sub-Task Creation Agent. Follow tasks.md (base template — shared rules)
+      plus mode-specific instructions in templates/tasks-modes/ when generating
+      in passes (see stage4_tasks.py multipass modes).
+
+      ## AGENTS.md
+      If AGENTS.md is not in the target repo or change inputs/, ask the user once to
+      provide it (see schema agents_md.when_missing). Respect AgentRoutingMode from
+      constitution.md (PROVIDED vs PROVISIONAL).
+
+      ## Input precedence (conflicts)
+      1. constitution.md
+      2. specs.md (validated_specs.md in prompts)
+      3. plan.md (technical_plan.md)
+      4. repo-assessment.md (for file paths)
+      5. agents.md (routing)
+
+      ## Required output structure (§0–§5)
+      - §0 Input coverage checklist — map every FR-xx, SC-xx, and plan phase to Task IDs
+      - §1 Task Dependency Graph (Mermaid) — stable node IDs T1_1, T1_2, …
+      - §2 Linear Execution Order — valid topological sort
+      - §3 Task Execution Manifest — table columns:
+        Task ID | Task Title | Assigned Agent | Phase | Depends On | Parallel OK | Complexity | Risk
+      - §4 Task Payloads — ### Task <ID>: <Title> with Objective, Target file(s),
+        Non-goals, Implementation notes, Acceptance criteria, Downstream handoff
+      - §5 Orchestration notes — Retry Boundaries, Merge Conflict Hotspots,
+        Open Questions Requiring SME Before Execution
+
+      Header fields: Feature, AgentRoutingMode (from constitution), ConstitutionVersion.
+
+      ## Agent routing
+      - If agents.md PROVIDED: Assigned Agent must match agents.md IDs exactly.
+      - If NOT PROVIDED: use provisional IDs (API_Agent, OperatorController_Agent,
+        ManifestsBindata_Agent, WebhookTLS_Agent, RBACSecurity_Agent, OLMRelease_Agent,
+        Testing_Agent, Docs_Agent) and mark AgentRoutingMode PROVISIONAL.
+
+      ## Generation modes (matches test harness stage4_tasks.py)
+      Prefer multipass for large backlogs:
+
+      **Pass 1 — skeleton** (`tasks-modes/skeleton.md`):
+        Generate §0–§3 only + fenced `tasks_index.json` array.
+        Required JSON fields per task: id, title, summary, phase, depends_on,
+        agent, parallel_ok, complexity (1|2|3|5|8), risk (Low|Med|High).
+
+      **Pass 2 — payloads** (`tasks-modes/payloads.md`):
+        Generate §4 subsections for each task batch (by plan phase).
+        May split batches on truncation; never skip a task ID.
+
+      **Pass 3 — orchestration** (`tasks-modes/orchestration.md`):
+        Generate §5 only from full tasks_index.json.
+
+      **Pass 4 — impact_assessment** (`tasks-modes/impact_assessment.md`):
+        When user rejects a phase in phase-feedback mode, classify feedback as
+        structural (skeleton change) vs payload-level (revision only).
+        Respond with JSON: structural, affected_phases, revision_notes,
+        and skeleton_guidance OR payload_guidance.
+
+      **Pass 5 — payload_revision** (`tasks-modes/payload_revision.md`):
+        Re-generate §4 payloads incorporating user feedback and revision guidance.
+
+      **single mode** (`tasks-modes/single.md`):
+        One response with complete §0–§5 (may truncate if >15 tasks).
+
+      Merge scratch artifacts (skeleton + payloads + orchestration) into final tasks.md.
+
+      ## Hard boundaries
+      - Do NOT write production code, patches, or diffs.
+      - Do NOT invent file paths not in repo-assessment.md or plan.md.
+      - Mark Evidence: PARTIAL when repo-assessment confidence is low.
+      - Pair implementation tasks with verification tasks when constitution requires.
+      - Complexity: Fibonacci 1, 2, 3, 5, 8.
+
+      ## APPROVAL GATE
+      After merged tasks.md:
+      1. SUMMARIZE: total tasks, complexity points, high-risk count, parallelisable count,
+         agent distribution, manifest preview (first 5 rows).
+      2. Optional per-phase gates when phase_feedback is enabled (review each phase's
+         manifest rows and payload preview before continuing).
+      3. ASK: "Do you approve tasks.md? (Approve / Reject with feedback)"
+      4. ON REJECT: Regenerate (full multipass restart or phase-level revision per impact).
+      5. ON APPROVE: Unlock Implementation Stage.
+    gate:
+      type: approval
+      evaluated_by: user
+    generation:
+      mode: multipass
+      modes_supported:
+        - multipass
+        - single
+      passes:
+        - id: skeleton
+          generates_sections: "0-3"
+          also_generates: tasks_index.json
+          mode_template: tasks-modes/skeleton.md
+        - id: payloads
+          generates_sections: "4"
+          batched_by: plan_phase
+          mode_template: tasks-modes/payloads.md
+        - id: orchestration
+          generates_sections: "5"
+          mode_template: tasks-modes/orchestration.md
+        - id: impact_assessment
+          mode_template: tasks-modes/impact_assessment.md
+          trigger: phase_feedback_rejection
+        - id: payload_revision
+          mode_template: tasks-modes/payload_revision.md
+          trigger: non_structural_phase_rejection
+      scratch_dir: output/_stage4
+      regenerate_orchestration_only:
+        cli_flag: --pass3-only
+        requires: multipass
+        requires_scratch: true
+        description: >-
+          Re-run Pass 3 (§5 orchestration) and merge from existing scratch artifacts
+          (skeleton.md, tasks_index.json, payloads/) without regenerating §0–§4.
+      env_overrides:
+        STAGE4_MODE: overrides stage4_mode (multipass | single)
+      config_keys:
+        stage4_mode: multipass
+        stage4_payload_max_tokens: 4096
+        stage4_orchestration_max_tokens: 4096
+        stage4_keep_scratch: true
+        stage4_phase_feedback: true
+        stage4_impact_max_tokens: 1024
+    requires:
+      - plan
+
+  - id: implementation
+    workflow_stage: implementation
+    generates: implementation-phase-log.md
+    template: implementation.md
+    description: >-
+      Code Generation — phase-by-phase execution into target repository using
+      approved tasks.md payloads and upstream artifacts.
+    outputs:
+      - code changes in user's fork
+      - draft pull request on fork_repo_url
+      - implementation-report.md
+      - implementation-checklist.md
+      - adrs.md (conditional)
+    inputs:
+      required:
+        - tasks.md
+        - constitution.md
+        - specs.md
+        - plan.md
+        - forked repository URL (inputs/jira.yaml fork_repo_url — ask user if missing)
+      optional:
+        - repo-assessment.md
+        - target repository (inputs/jira.yaml target_repo — upstream reference)
+        - AGENTS.md
+        - agents.md
+    instruction: |
+      You are the Code Generation Agent (Robotic Engineer Role).
+
+      ## Mission
+      Consume approved task payloads and generate machine-executable code into
+      the user's forked repository incrementally, one plan phase at a time.
+      After all phases are approved, push the changes and open a draft PR on
+      the fork. This stage produces code — it is the final pipeline stage.
+
+      ## Prerequisites
+      Before starting, confirm ALL of the following exist in
+      openspec/changes/<change>/:
+      - tasks.md (approved — Task Creation complete)
+      - constitution.md (approved)
+      - specs.md (approved)
+      - plan.md (approved)
+
+      ## Fork setup (REQUIRED — before any FILE OPERATIONS)
+      1. Read inputs/jira.yaml for fork_repo_url (see schema fork_repo).
+      2. If fork_repo_url is absent, ASK the user once:
+         "Provide the URL of your forked repository (e.g.
+         https://github.com/<you>/cert-manager-operator)."
+      3. Persist fork_repo_url to inputs/jira.yaml. Do not proceed without it.
+      4. Clone fork_repo_url locally if not already present, or verify the
+         existing checkout points at the user's fork and is on a clean base.
+      5. Record jira_key from inputs/jira.yaml for branch naming and commit messages.
+      6. target_repo in inputs/jira.yaml is the upstream reference from
+         repo-assessment — use it for context only. All FILE OPERATIONS apply
+         to the fork working copy.
+      7. Create the feature branch on the fork working copy (see schema
+         fork_repo.feature_branch). Remain on this branch for all implementation
+         work. Do not commit to master/main on the fork.
+
+      repo-assessment.md is optional but strongly recommended for target-file
+      accuracy. Respect AgentRoutingMode and Assigned Agent values from
+      tasks.md §3 (see schema agents_md).
+
+      ## Input precedence (conflicts)
+      1. constitution.md (non-negotiable guardrails)
+      2. specs.md (requirements and acceptance criteria)
+      3. plan.md (architectural context and verification hooks)
+      4. repo-assessment.md (target files and evidence)
+      5. tasks.md §4 payloads for the current phase
+      6. tasks.md §5 orchestration notes (retry boundaries, merge hotspots)
+
+      ## Phase parsing
+      Derive implementation phases from tasks.md:
+      1. Read phase names from §3 Task Execution Manifest (Phase column on rows
+         like T1_1, T2_1, …).
+      2. Read task payloads from §4 (### Task T<n>_<m>: … blocks).
+      3. Group §4 payloads by task ID phase prefix: T1_* → Phase 1, T2_* → Phase 2, etc.
+      4. Order phases by numeric prefix. Respect §1 DAG and §2 Linear Execution
+         Order — do not start a phase until all Depends On phases are complete
+         and user-approved.
+      5. If §4 is absent, treat the backlog as a single "All Tasks" phase.
+
+      When the user requests a single phase only, filter to phases whose name
+      partially matches the request (e.g. "Phase 2", "Controller").
+
+      ## Per-phase prompt composition
+      For each phase, load into context:
+      - constitution.md (non-negotiable rules)
+      - specs.md (requirements — trace acceptance criteria)
+      - plan.md (architectural context)
+      - repo-assessment.md when available (target files and evidence)
+      - PHASE name and all §4 payloads for tasks in that phase
+      - REVISION FEEDBACK block when re-generating after user rejection
+
+      ## Required response format (each phase)
+      Structure every phase response with these sections IN ORDER:
+
+      ### ## PHASE SUMMARY
+      Brief description of what this phase implements.
+
+      ### ## FILE OPERATIONS
+      Express every file mutation using one of these formats — do NOT output raw
+      code outside these blocks:
+
+      **CREATE** — new file (creates parent directories as needed):
+      ```
+      ### CREATE: relative/path/to/file
+      ```<language>
+      <full file content>
+      ```
+      ```
+
+      **EDIT** — locate exact existing text and replace (first occurrence):
+      ```
+      ### EDIT: relative/path/to/file
+      #### FIND
+      ```<language>
+      <exact existing code to locate>
+      ```
+      #### REPLACE
+      ```<language>
+      <replacement code>
+      ```
+      ```
+      Multiple EDIT blocks may target the same file.
+
+      **DELETE** — remove a file:
+      ```
+      ### DELETE: relative/path/to/file
+      ```
+
+      ### ## DEVIATIONS (optional)
+      Log blockers that prevent strict adherence to plan.md or task payloads.
+      Format: `- **Task ID**: <description and rationale>`
+      Omit this section entirely when there are no deviations.
+
+      ## Applying FILE OPERATIONS to the fork working copy
+      - CREATE: write the file; create parent directories as needed.
+      - EDIT: replace the first exact FIND match. If FIND is not found, report
+        the skip — do not silently ignore.
+      - DELETE: remove the file if it exists.
+      - Paths are relative to the fork working copy root.
+
+      ## Core rules
+      1. **Tool usage**: Every mutation MUST use the FILE OPERATIONS format above.
+      2. **No scope creep**: Do not invent requirements. Missing utilities → DEVIATIONS.
+      3. **Validation**: Generated code MUST satisfy each task's Acceptance Criteria.
+      4. **TDD compliance**: When a payload says "write test before implementation",
+         emit the test CREATE before the implementation CREATE.
+      5. **Strict constraints**: Follow constitution.md exactly. Match existing repo
+         patterns from repo-assessment.md. Respect per-task Non-goals and forbidden edits.
+      6. **Orchestration**: Consult tasks.md §5 for retry boundaries and merge conflict
+         hotspots before editing generated or shared files.
+      7. **Dependencies**: Never start a task whose Depends On tasks are incomplete.
+         Respect Parallel OK from §3 — parallelize only when file sets are disjoint
+         AND Parallel OK is Yes.
+
+      ## Verification (each phase)
+      After applying FILE OPERATIONS for a phase:
+      - Run tests named in that phase's task Acceptance Criteria.
+      - Run test suites referenced in constitution.md or plan.md verification hooks
+        when applicable to the files touched.
+      - Include pass/fail results in the phase summary.
+
+      ## Phase loop
+      FOR EACH PHASE (in dependency order):
+
+      1. **Generate**: Produce PHASE SUMMARY + FILE OPERATIONS + optional DEVIATIONS.
+      2. **Validate format**: If no FILE OPERATIONS are present, retry up to 3 times
+         with explicit format correction guidance. After 3 failures, halt the phase
+         and report the error — do not advance.
+      3. **Apply**: Execute all FILE OPERATIONS against the fork working copy.
+      4. **Verify**: Run applicable tests; capture results.
+      5. **Summarize** for the approval gate:
+         - Phase name
+         - Files touched (list paths)
+         - Test results (PASSED / FAILED / SKIPPED with brief detail)
+         - Deviations logged (if any)
+      6. **Gate**: ASK — "Approve this phase? (Approve / Reject with feedback)"
+      7. **ON REJECT**: Incorporate feedback into REVISION FEEDBACK; re-generate the
+         full FILE OPERATIONS for this phase; re-apply. Repeat until approved.
+         There is no iteration limit on rejection cycles.
+      8. **ON APPROVE**:
+         - Mark completed task checkboxes in tasks.md (`- [ ]` → `- [x]`) when present.
+         - Append phase to the phase log (name, touched files, test outcome, deviations).
+         - Advance to the next phase.
+
+      ## Error handling
+      - **fork_repo_url missing**: Halt; ask user for fork URL (see Fork setup).
+      - **fork not cloneable**: Halt; ask user to verify URL and GitHub access.
+      - **EDIT FIND not found**: Report which file and block failed; offer to revise
+        the FIND block or skip with user confirmation.
+      - **Task failure / blocker**: Halt, report context, suggest a fix, wait for
+        user input before continuing.
+      - Never silently skip a phase or gate.
+
+      ## Post-loop (all phases approved)
+      1. Write implementation-report.md and implementation-checklist.md to the change
+         directory (see co-generated artifact instructions below).
+      2. Write adrs.md ONLY if any phase logged a DEVIATIONS section.
+      3. **Push and draft PR** (see schema fork_repo.draft_pr):
+         a. Confirm all commits are on the feature branch created at fork setup
+            (see fork_repo.feature_branch). If not, move commits onto that branch
+            before pushing — do not create ad-hoc baseline branches.
+         b. Stage and commit all changes with message referencing jira_key
+            (e.g. "CM-830: implement trust-manager operator integration")
+         c. Push the feature branch to fork_repo_url
+         d. Open a **draft** pull request on fork_repo_url
+            (head = feature branch, base = fork default branch)
+            using `gh pr create --draft` or GitHub MCP
+         e. Record the draft PR URL for the final summary and report
+      4. Present final summary to the user:
+         - Phases completed vs planned
+         - Total files changed (cross-reference Target file(s) from §4 payloads)
+         - Test results summary
+         - Deviation count and adrs.md path (if written)
+         - Report artifact paths
+         - **Draft PR URL** on the user's fork
+         - Overall workflow quality assessment
+    gate:
+      type: per_phase_approval
+      evaluated_by: user
+      prompt: "Approve this phase? (Approve / Reject with feedback)"
+      on_reject: >-
+        Re-generate the full FILE OPERATIONS for the current phase incorporating
+        user feedback; re-apply to the fork working copy. Repeat until approved.
+      on_invalid_format: >-
+        Retry up to 3 times when FILE OPERATIONS are missing or malformed; then
+        halt the phase and report the error.
+    requires:
+      - tasks
+
+  - id: implementation-report
+    workflow_stage: implementation
+    co_generated_with:
+      - implementation-checklist
+    generates: implementation-report.md
+    template: implementation-report.md
+    format: markdown
+    description: >-
+      Post-execution summary written at the end of the Implementation Stage after
+      all phases are user-approved.
+    instruction: |
+      Co-generate at the end of the Implementation Stage (after all phases approved).
+
+      ## Sections (required)
+      - **Summary** — one paragraph overview
+      - **Phases Completed** — table: Phase | Files Changed | Tests | Deviations
+      - **All Files Changed** — grouped by phase
+      - **Test Results Summary**
+      - **Deviations / ADRs** — if any (otherwise state "None")
+      - **Draft Pull Request** — fork_repo_url, branch name, and PR URL
+
+      Source data from the phase log: phase name, touched files, test outcome,
+      and DEVIATIONS text from each approved phase. Include draft PR details
+      from the post-loop push step.
+    gate:
+      type: informational
+      evaluated_by: agent
+    requires:
+      - tasks
+
+  - id: implementation-checklist
+    workflow_stage: implementation
+    co_generated_with:
+      - implementation-report
+    generates: implementation-checklist.md
+    template: implementation-checklist.md
+    format: markdown
+    description: >-
+      Traceability checklist mapping every touched file to specs.md requirement IDs.
+      Co-generated with implementation-report.md at stage close.
+    instruction: |
+      Co-generate with implementation-report.md at stage close.
+
+      Produce a markdown table:
+
+      | File | Requirement IDs | Reason |
+
+      Map every file touched during implementation to the FR-*, SC-*, and AC-*
+      IDs from specs.md that the change satisfies. Include a brief reason column.
+    gate:
+      type: informational
+      evaluated_by: agent
+    requires:
+      - tasks
+
+  - id: adrs
+    workflow_stage: implementation
+    generates: adrs.md
+    template: adrs.md
+    format: markdown
+    description: >-
+      Architectural Decision Records — deviation log written only when one or more
+      phases reported DEVIATIONS during implementation.
+    optional: true
+    instruction: |
+      Write adrs.md ONLY when at least one phase logged a ## DEVIATIONS section.
+
+      ## Format
+      ```
+      # Architectural Decision Records (Deviations)
+
+      ## <Phase name>
+      <deviation bullets from that phase>
+
+      ---
+
+      ## <Next phase name>
+      ...
+      ```
+
+      Each deviation bullet MUST reference the Task ID and rationale.
+    gate:
+      type: informational
+      evaluated_by: agent
+    requires:
+      - tasks
+
+apply:
+  workflow_stage: implementation
+  artifact: implementation
+  requires:
+    - tasks
+    - specs
+    - constitution
+    - plan
+  optional_context:
+    - repo-assessment
+    - AGENTS.md
+  fork_repo: "{fork_repo_url from inputs/jira.yaml — ask user at stage start if missing}"
+  upstream_repo: "{target_repo from inputs/jira.yaml — reference only}"
+  tracks: tasks.md
+  instruction: |
+    Execute the Implementation Stage. Follow the `implementation` artifact
+    instruction in this schema exactly — it is the authoritative workflow.
+
+    Entry: /opsx:apply on a change where tasks.md (Task Creation) and all
+    upstream artifacts are approved.
+
+    FIRST STEP: Ask for fork_repo_url if not in inputs/jira.yaml (see schema
+    fork_repo). Clone the fork, create a feature branch immediately (see
+    fork_repo.feature_branch), implement on that branch only; after all phases
+    are approved, push and open a draft PR from the feature branch to the fork's
+    default branch (master or main).
+
+    Do not skip phases, gates, fork setup, or format validation. Do not advance
+    past a rejected phase without user-approved revision.

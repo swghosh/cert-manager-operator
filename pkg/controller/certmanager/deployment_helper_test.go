@@ -1009,3 +1009,141 @@ func TestGetOverrideReplicasFor(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPerformanceArgsFor(t *testing.T) {
+	tests := []struct {
+		name           string
+		certManagerObj v1alpha1.CertManager
+		deploymentName string
+		expectedArgs   []string
+	}{
+		{
+			name: "all performance args set for controller deployment",
+			certManagerObj: v1alpha1.CertManager{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: v1alpha1.CertManagerSpec{
+					ControllerConfig: &v1alpha1.DeploymentConfig{
+						MaxConcurrentChallenges: ptr.To(int32(120)),
+						ConcurrentWorkers:       ptr.To(int32(10)),
+						KubeAPIQPS:              ptr.To("50.5"),
+						KubeAPIBurst:            ptr.To(int32(100)),
+					},
+				},
+			},
+			deploymentName: certmanagerControllerDeployment,
+			expectedArgs: []string{
+				"--max-concurrent-challenges=120",
+				"--concurrent-workers=10",
+				"--kube-api-qps=50.5",
+				"--kube-api-burst=100",
+			},
+		},
+		{
+			name: "partial performance args set for controller deployment",
+			certManagerObj: v1alpha1.CertManager{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: v1alpha1.CertManagerSpec{
+					ControllerConfig: &v1alpha1.DeploymentConfig{
+						MaxConcurrentChallenges: ptr.To(int32(60)),
+						KubeAPIBurst:            ptr.To(int32(50)),
+					},
+				},
+			},
+			deploymentName: certmanagerControllerDeployment,
+			expectedArgs: []string{
+				"--max-concurrent-challenges=60",
+				"--kube-api-burst=50",
+			},
+		},
+		{
+			name: "no performance args returns nil for controller deployment",
+			certManagerObj: v1alpha1.CertManager{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: v1alpha1.CertManagerSpec{
+					ControllerConfig: &v1alpha1.DeploymentConfig{
+						OverrideArgs: []string{"--v=3"},
+					},
+				},
+			},
+			deploymentName: certmanagerControllerDeployment,
+			expectedArgs:   nil,
+		},
+		{
+			name: "nil controller config returns nil",
+			certManagerObj: v1alpha1.CertManager{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: v1alpha1.CertManagerSpec{},
+			},
+			deploymentName: certmanagerControllerDeployment,
+			expectedArgs:   nil,
+		},
+		{
+			name: "returns nil for webhook deployment",
+			certManagerObj: v1alpha1.CertManager{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: v1alpha1.CertManagerSpec{
+					ControllerConfig: &v1alpha1.DeploymentConfig{
+						MaxConcurrentChallenges: ptr.To(int32(120)),
+					},
+				},
+			},
+			deploymentName: certmanagerWebhookDeployment,
+			expectedArgs:   nil,
+		},
+		{
+			name: "returns nil for cainjector deployment",
+			certManagerObj: v1alpha1.CertManager{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: v1alpha1.CertManagerSpec{
+					ControllerConfig: &v1alpha1.DeploymentConfig{
+						MaxConcurrentChallenges: ptr.To(int32(120)),
+					},
+				},
+			},
+			deploymentName: certmanagerCAinjectorDeployment,
+			expectedArgs:   nil,
+		},
+		{
+			name: "only kubeAPIQPS set",
+			certManagerObj: v1alpha1.CertManager{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cluster",
+				},
+				Spec: v1alpha1.CertManagerSpec{
+					ControllerConfig: &v1alpha1.DeploymentConfig{
+						KubeAPIQPS: ptr.To("20"),
+					},
+				},
+			},
+			deploymentName: certmanagerControllerDeployment,
+			expectedArgs: []string{
+				"--kube-api-qps=20",
+			},
+		},
+	}
+
+	ctx := t.Context()
+	fakeClient, certManagerInformers, certManagerChan := setupSyncedFakeCertManagerInformer(t, ctx)
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			withFakeCertManagerForTest(t, ctx, fakeClient, certManagerChan, &tc.certManagerObj)
+
+			actualArgs, err := getPerformanceArgsFor(certManagerInformers, tc.deploymentName)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedArgs, actualArgs)
+		})
+	}
+}

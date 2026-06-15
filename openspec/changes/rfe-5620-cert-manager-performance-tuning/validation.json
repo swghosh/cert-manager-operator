@@ -1,0 +1,52 @@
+{
+  "metadata": {
+    "ticket_id": "RFE-5620",
+    "doc_type": "jira",
+    "pass_threshold": 80,
+    "output_mode": "json_plus_summary",
+    "weights_applied": { "completeness": 0.6, "quality": 0.4 }
+  },
+  "validation_results": {
+    "completeness_score": 85,
+    "quality_score": 80,
+    "overall_score": 83,
+    "overall_status": "PASS",
+    "missing_elements": [],
+    "quality_issues": [
+      {
+        "type": "Ambiguity",
+        "quote": "bigger environments where there are hundreds of certificates issued",
+        "suggestion": "Define 'bigger environments' quantitatively: e.g., 'clusters with 500+ Certificate CRs' or 'environments issuing 100+ certificates per hour'."
+      },
+      {
+        "type": "Ambiguity",
+        "quote": "high number of certificates at once",
+        "suggestion": "Quantify 'high number': e.g., '200+ certificates within a 5-minute window during DR failover'."
+      },
+      {
+        "type": "Testability",
+        "quote": "Speed up the certificate issue process",
+        "suggestion": "Add measurable acceptance criteria: 'Given a cluster with 500 pending Certificate CRs, When cert-manager reconciles with tuned parameters, Then all certificates are issued within 10 minutes (vs 30 minutes baseline)'."
+      }
+    ],
+    "cert_manager_ecosystem": {
+      "api_lifecycle_complete": true,
+      "rbac_blast_radius_documented": false,
+      "webhook_tls_and_failure_modes": false,
+      "install_uninstall_semantics_clear": false,
+      "platform_matrix_addressed": true,
+      "observability_status_documented": false,
+      "upgrade_skew_addressed": false,
+      "gaps": [
+        "RBAC: Does exposing kube-api-qps/burst have security implications? Can users set arbitrarily high values?",
+        "Webhooks: Will validation webhooks enforce parameter bounds?",
+        "Install/uninstall: What happens to custom parameters on operator upgrade/downgrade?",
+        "Upgrade: What happens to existing CertManager CRs when new fields are added?"
+      ]
+    },
+    "blockers": [],
+    "non_blockers": [
+      "Performance baseline/targets deferred to optional future e2e"
+    ]
+  }
+}

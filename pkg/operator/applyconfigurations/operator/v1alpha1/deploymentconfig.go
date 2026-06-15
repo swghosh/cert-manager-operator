@@ -9,12 +9,16 @@ import (
 // DeploymentConfigApplyConfiguration represents a declarative configuration of the DeploymentConfig type for use
 // with apply.
 type DeploymentConfigApplyConfiguration struct {
-	OverrideArgs       []string                                           `json:"overrideArgs,omitempty"`
-	OverrideEnv        []v1.EnvVar                                        `json:"overrideEnv,omitempty"`
-	OverrideLabels     map[string]string                                  `json:"overrideLabels,omitempty"`
-	OverrideResources  *CertManagerResourceRequirementsApplyConfiguration `json:"overrideResources,omitempty"`
-	OverrideReplicas   *int32                                             `json:"overrideReplicas,omitempty"`
-	OverrideScheduling *CertManagerSchedulingApplyConfiguration           `json:"overrideScheduling,omitempty"`
+	OverrideArgs            []string                                           `json:"overrideArgs,omitempty"`
+	OverrideEnv             []v1.EnvVar                                        `json:"overrideEnv,omitempty"`
+	OverrideLabels          map[string]string                                  `json:"overrideLabels,omitempty"`
+	OverrideResources       *CertManagerResourceRequirementsApplyConfiguration `json:"overrideResources,omitempty"`
+	OverrideReplicas        *int32                                             `json:"overrideReplicas,omitempty"`
+	OverrideScheduling      *CertManagerSchedulingApplyConfiguration           `json:"overrideScheduling,omitempty"`
+	MaxConcurrentChallenges *int32                                             `json:"maxConcurrentChallenges,omitempty"`
+	ConcurrentWorkers       *int32                                             `json:"concurrentWorkers,omitempty"`
+	KubeAPIQPS              *string                                            `json:"kubeAPIQPS,omitempty"`
+	KubeAPIBurst            *int32                                             `json:"kubeAPIBurst,omitempty"`
 }
 
 // DeploymentConfigApplyConfiguration constructs a declarative configuration of the DeploymentConfig type for use with
@@ -78,5 +82,37 @@ func (b *DeploymentConfigApplyConfiguration) WithOverrideReplicas(value int32) *
 // If called multiple times, the OverrideScheduling field is set to the value of the last call.
 func (b *DeploymentConfigApplyConfiguration) WithOverrideScheduling(value *CertManagerSchedulingApplyConfiguration) *DeploymentConfigApplyConfiguration {
 	b.OverrideScheduling = value
+	return b
+}
+
+// WithMaxConcurrentChallenges sets the MaxConcurrentChallenges field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the MaxConcurrentChallenges field is set to the value of the last call.
+func (b *DeploymentConfigApplyConfiguration) WithMaxConcurrentChallenges(value int32) *DeploymentConfigApplyConfiguration {
+	b.MaxConcurrentChallenges = &value
+	return b
+}
+
+// WithConcurrentWorkers sets the ConcurrentWorkers field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ConcurrentWorkers field is set to the value of the last call.
+func (b *DeploymentConfigApplyConfiguration) WithConcurrentWorkers(value int32) *DeploymentConfigApplyConfiguration {
+	b.ConcurrentWorkers = &value
+	return b
+}
+
+// WithKubeAPIQPS sets the KubeAPIQPS field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the KubeAPIQPS field is set to the value of the last call.
+func (b *DeploymentConfigApplyConfiguration) WithKubeAPIQPS(value string) *DeploymentConfigApplyConfiguration {
+	b.KubeAPIQPS = &value
+	return b
+}
+
+// WithKubeAPIBurst sets the KubeAPIBurst field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the KubeAPIBurst field is set to the value of the last call.
+func (b *DeploymentConfigApplyConfiguration) WithKubeAPIBurst(value int32) *DeploymentConfigApplyConfiguration {
+	b.KubeAPIBurst = &value
 	return b
 }

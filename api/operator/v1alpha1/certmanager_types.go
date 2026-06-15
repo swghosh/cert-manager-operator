@@ -137,6 +137,50 @@ type DeploymentConfig struct {
 	// +kubebuilder:validation:Optional
 	// +optional
 	OverrideScheduling CertManagerScheduling `json:"overrideScheduling,omitempty"`
+
+	// MaxConcurrentChallenges controls the maximum number of ACME challenges
+	// that can be processed simultaneously by the cert-manager controller.
+	// This is useful in high-volume environments or disaster recovery scenarios
+	// where many certificates need to be issued at once.
+	// Maps to the --max-concurrent-challenges flag on the controller.
+	// If not specified, the upstream default is used.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxConcurrentChallenges *int32 `json:"maxConcurrentChallenges,omitempty"`
+
+	// ConcurrentWorkers controls the number of concurrent workers per controller
+	// (e.g., Certificate, Issuer, etc.) in the cert-manager controller.
+	// Increasing this value can improve throughput when processing large numbers
+	// of resources.
+	// Maps to the --concurrent-workers flag on the controller.
+	// If not specified, the upstream default is used.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	ConcurrentWorkers *int32 `json:"concurrentWorkers,omitempty"`
+
+	// KubeAPIQPS controls the queries per second (QPS) limit for the
+	// Kubernetes API client used by the cert-manager controller.
+	// Increasing this value allows the controller to make more API calls,
+	// which can improve performance in high-volume environments.
+	// Maps to the --kube-api-qps flag on the controller.
+	// If not specified, the upstream default is used.
+	// The value should be a valid float number as a string (e.g., "20", "50.5").
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Pattern=`^[0-9]+(\.[0-9]+)?$`
+	// +optional
+	KubeAPIQPS *string `json:"kubeAPIQPS,omitempty"`
+
+	// KubeAPIBurst controls the burst limit for the Kubernetes API client
+	// used by the cert-manager controller. This is the maximum number of
+	// requests that can be made in a short burst before QPS limiting kicks in.
+	// Maps to the --kube-api-burst flag on the controller.
+	// If not specified, the upstream default is used.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	KubeAPIBurst *int32 `json:"kubeAPIBurst,omitempty"`
 }
 
 // CertManagerResourceRequirements describes the compute resource requirements for the cert-manager operands,

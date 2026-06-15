@@ -50,6 +50,49 @@ spec:
                                                               will not update resources with certificates outside of the configured namespace.
                   --v Level                                   number for the log level verbosity
                 properties:
+                  concurrentWorkers:
+                    description: |-
+                      ConcurrentWorkers controls the number of concurrent workers per controller
+                      (e.g., Certificate, Issuer, etc.) in the cert-manager controller.
+                      Increasing this value can improve throughput when processing large numbers
+                      of resources.
+                      Maps to the --concurrent-workers flag on the controller.
+                      If not specified, the upstream default is used.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  kubeAPIBurst:
+                    description: |-
+                      KubeAPIBurst controls the burst limit for the Kubernetes API client
+                      used by the cert-manager controller. This is the maximum number of
+                      requests that can be made in a short burst before QPS limiting kicks in.
+                      Maps to the --kube-api-burst flag on the controller.
+                      If not specified, the upstream default is used.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  kubeAPIQPS:
+                    description: |-
+                      KubeAPIQPS controls the queries per second (QPS) limit for the
+                      Kubernetes API client used by the cert-manager controller.
+                      Increasing this value allows the controller to make more API calls,
+                      which can improve performance in high-volume environments.
+                      Maps to the --kube-api-qps flag on the controller.
+                      If not specified, the upstream default is used.
+                      The value should be a valid float number as a string (e.g., "20", "50.5").
+                    pattern: ^[0-9]+(\.[0-9]+)?$
+                    type: string
+                  maxConcurrentChallenges:
+                    description: |-
+                      MaxConcurrentChallenges controls the maximum number of ACME challenges
+                      that can be processed simultaneously by the cert-manager controller.
+                      This is useful in high-volume environments or disaster recovery scenarios
+                      where many certificates need to be issued at once.
+                      Maps to the --max-concurrent-challenges flag on the controller.
+                      If not specified, the upstream default is used.
+                    format: int32
+                    minimum: 1
+                    type: integer
                   overrideArgs:
                     items:
                       type: string
@@ -331,6 +374,49 @@ spec:
                   Eg:
                     - "HTTP_PROXY": "http://proxy:8080"
                 properties:
+                  concurrentWorkers:
+                    description: |-
+                      ConcurrentWorkers controls the number of concurrent workers per controller
+                      (e.g., Certificate, Issuer, etc.) in the cert-manager controller.
+                      Increasing this value can improve throughput when processing large numbers
+                      of resources.
+                      Maps to the --concurrent-workers flag on the controller.
+                      If not specified, the upstream default is used.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  kubeAPIBurst:
+                    description: |-
+                      KubeAPIBurst controls the burst limit for the Kubernetes API client
+                      used by the cert-manager controller. This is the maximum number of
+                      requests that can be made in a short burst before QPS limiting kicks in.
+                      Maps to the --kube-api-burst flag on the controller.
+                      If not specified, the upstream default is used.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  kubeAPIQPS:
+                    description: |-
+                      KubeAPIQPS controls the queries per second (QPS) limit for the
+                      Kubernetes API client used by the cert-manager controller.
+                      Increasing this value allows the controller to make more API calls,
+                      which can improve performance in high-volume environments.
+                      Maps to the --kube-api-qps flag on the controller.
+                      If not specified, the upstream default is used.
+                      The value should be a valid float number as a string (e.g., "20", "50.5").
+                    pattern: ^[0-9]+(\.[0-9]+)?$
+                    type: string
+                  maxConcurrentChallenges:
+                    description: |-
+                      MaxConcurrentChallenges controls the maximum number of ACME challenges
+                      that can be processed simultaneously by the cert-manager controller.
+                      This is useful in high-volume environments or disaster recovery scenarios
+                      where many certificates need to be issued at once.
+                      Maps to the --max-concurrent-challenges flag on the controller.
+                      If not specified, the upstream default is used.
+                    format: int32
+                    minimum: 1
+                    type: integer
                   overrideArgs:
                     items:
                       type: string
@@ -926,6 +1012,49 @@ spec:
                   --dynamic-serving-dns-names strings            DNS names that should be present on certificates generated by the dynamic serving CA
                   --v Level                                      number for the log level verbosity
                 properties:
+                  concurrentWorkers:
+                    description: |-
+                      ConcurrentWorkers controls the number of concurrent workers per controller
+                      (e.g., Certificate, Issuer, etc.) in the cert-manager controller.
+                      Increasing this value can improve throughput when processing large numbers
+                      of resources.
+                      Maps to the --concurrent-workers flag on the controller.
+                      If not specified, the upstream default is used.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  kubeAPIBurst:
+                    description: |-
+                      KubeAPIBurst controls the burst limit for the Kubernetes API client
+                      used by the cert-manager controller. This is the maximum number of
+                      requests that can be made in a short burst before QPS limiting kicks in.
+                      Maps to the --kube-api-burst flag on the controller.
+                      If not specified, the upstream default is used.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  kubeAPIQPS:
+                    description: |-
+                      KubeAPIQPS controls the queries per second (QPS) limit for the
+                      Kubernetes API client used by the cert-manager controller.
+                      Increasing this value allows the controller to make more API calls,
+                      which can improve performance in high-volume environments.
+                      Maps to the --kube-api-qps flag on the controller.
+                      If not specified, the upstream default is used.
+                      The value should be a valid float number as a string (e.g., "20", "50.5").
+                    pattern: ^[0-9]+(\.[0-9]+)?$
+                    type: string
+                  maxConcurrentChallenges:
+                    description: |-
+                      MaxConcurrentChallenges controls the maximum number of ACME challenges
+                      that can be processed simultaneously by the cert-manager controller.
+                      This is useful in high-volume environments or disaster recovery scenarios
+                      where many certificates need to be issued at once.
+                      Maps to the --max-concurrent-challenges flag on the controller.
+                      If not specified, the upstream default is used.
+                    format: int32
+                    minimum: 1
+                    type: integer
                   overrideArgs:
                     items:
                       type: string
