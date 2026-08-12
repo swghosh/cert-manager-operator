@@ -84,12 +84,14 @@ type CertManagerNetworkPolicyUserDefinedController struct {
 	certManagerOperatorInformers certmanoperatorinformers.SharedInformerFactory
 	kubeClient                   kubernetes.Interface
 	eventRecorder                events.Recorder
+	resourceCache                resourceapply.ResourceCache
 }
 
 func NewCertManagerNetworkPolicyUserDefinedController(
 	operatorClient v1helpers.OperatorClient,
 	certManagerOperatorInformers certmanoperatorinformers.SharedInformerFactory,
 	kubeClient kubernetes.Interface,
+	kubeInformersForNamespaces v1helpers.KubeInformersForNamespaces,
 	eventRecorder events.Recorder,
 ) factory.Controller {
 	c := &CertManagerNetworkPolicyUserDefinedController{
@@ -97,12 +99,14 @@ func NewCertManagerNetworkPolicyUserDefinedController(
 		certManagerOperatorInformers: certManagerOperatorInformers,
 		kubeClient:                   kubeClient,
 		eventRecorder:                eventRecorder.WithComponentSuffix("cert-manager-networkpolicy-user-defined"),
+		resourceCache:                resourceapply.NewResourceCache(),
 	}
 
 	return factory.New().
 		WithInformers(
 			operatorClient.Informer(),
 			certManagerOperatorInformers.Operator().V1alpha1().CertManagers().Informer(),
+			kubeInformersForNamespaces.InformersFor(certManagerNamespace).Networking().V1().NetworkPolicies().Informer(),
 		).
 		WithSync(c.sync).
 		ToController(certManagerNetworkPolicyUserDefinedControllerName, c.eventRecorder)
@@ -138,7 +142,6 @@ func (c *CertManagerNetworkPolicyUserDefinedController) sync(ctx context.Context
 		return fmt.Errorf("failed to reconcile user network policies: %w", err)
 	}
 
-	c.eventRecorder.Event("UserNetworkPolicyReconcileSuccess", "Successfully reconciled user-defined network policies")
 	return nil
 }
 
@@ -166,11 +169,11 @@ func (c *CertManagerNetworkPolicyUserDefinedController) validateComponentName(co
 }
 
 func (c *CertManagerNetworkPolicyUserDefinedController) reconcileUserNetworkPolicies(ctx context.Context, certManager *v1alpha1.CertManager) error {
-	// Apply each user-defined network policy
 	for _, userPolicy := range certManager.Spec.NetworkPolicies {
 		policy := c.createUserNetworkPolicy(userPolicy)
-		if err := c.createOrUpdateNetworkPolicy(ctx, policy); err != nil {
-			return fmt.Errorf("failed to create/update user network policy %s: %w", policy.Name, err)
+		_, _, err := resourceapply.ApplyNetworkPolicy(ctx, c.kubeClient.NetworkingV1(), c.eventRecorder, policy, c.resourceCache)
+		if err != nil {
+			return fmt.Errorf("failed to apply user network policy %s: %w", policy.Name, err)
 		}
 	}
 
@@ -225,32 +228,4 @@ func (c *CertManagerNetworkPolicyUserDefinedController) getPodSelectorForCompone
 			},
 		}
 	}
-}
-
-func (c *CertManagerNetworkPolicyUserDefinedController) createOrUpdateNetworkPolicy(ctx context.Context, policy *networkingv1.NetworkPolicy) error {
-	existing, err := c.kubeClient.NetworkingV1().NetworkPolicies(policy.Namespace).Get(ctx, policy.Name, metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Create new policy
-			_, err := c.kubeClient.NetworkingV1().NetworkPolicies(policy.Namespace).Create(ctx, policy, metav1.CreateOptions{})
-			if err != nil {
-				return fmt.Errorf("failed to create network policy: %w", err)
-			}
-			c.eventRecorder.Eventf("NetworkPolicyCreated", "Created user-defined network policy %s", policy.Name)
-			return nil
-		}
-		return fmt.Errorf("failed to get existing network policy: %w", err)
-	}
-
-	// Update existing policy
-	existing.Spec = policy.Spec
-	existing.Labels = policy.Labels
-	_, err = c.kubeClient.NetworkingV1().NetworkPolicies(policy.Namespace).Update(ctx, existing, metav1.UpdateOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to update network policy: %w", err)
-	}
-
-	c.eventRecorder.Eventf("NetworkPolicyUpdated", "Updated user-defined network policy %s", policy.Name)
-
-	return nil
 }
