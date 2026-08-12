@@ -1,0 +1,3 @@
+stage: bug-report
+template: templates/bug-report-template.md
+evals: []
