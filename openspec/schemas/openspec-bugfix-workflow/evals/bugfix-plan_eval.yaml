@@ -1,0 +1,3 @@
+stage: bugfix-plan
+template: templates/bugfix-plan-template.md
+evals: []
