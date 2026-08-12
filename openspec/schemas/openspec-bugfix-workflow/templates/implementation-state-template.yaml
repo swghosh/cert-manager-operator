@@ -1,0 +1,34 @@
+# implementation/state.yaml — Orchestrator state file
+# /opsx-apply MUST read this file FIRST on every invocation.
+# /opsx-apply MUST write this file after every state transition.
+# DO NOT manually edit unless recovering from a broken state.
+
+machine:
+  # states: IDLE | EXECUTING_TASK | RUNNING_TESTS | AWAITING_APPROVAL | COMPLETE
+  state: IDLE
+  current_task_id: null
+  current_task_index: 0
+  total_tasks: 0
+  last_transition: null  # ISO8601 timestamp
+
+# Completed tasks — lightweight; details in task-reports/<task-id>.md
+completed: []
+# Example:
+#   - task_id: T1_1
+#     test_result: PASS
+
+# Current task result — written during execution, cleared on advance
+current_task_result: null
+# When populated (during AWAITING_APPROVAL):
+#   task_id: T3_1
+#   files_changed: [pkg/controller/foo/controller.go]
+#   verification_pass: true
+#   test_command: "go test ./pkg/controller/foo/... -v -count=1"
+#   test_result: PASS
+#   test_output_summary: "ok  github.com/org/repo/pkg/controller/foo 0.022s"
+
+# Rejection history for current task (cleared on advance)
+rejections: []
+# Example:
+#   - round: 1
+#     feedback: "Missing error handling for nil pointer"
