@@ -24,3 +24,12 @@ bin/
 
 # Test binaries
 testbin/
+# ─── OpenSpec runtime artifacts (never commit) ───
+eval-generation/output-evals/
+eval-generation/output-refined-templates/
+eval-generation/eval-generation-workflow/outputs/
+eval-generation/eval-generation-workflow/rounds/
+eval-generation/eval-generation-workflow/template-gaps/
+eval-generation/eval-generation-workflow/refined-templates/
+eval-generation/eval-generation-workflow/round-state.yaml
+openspec/changes/

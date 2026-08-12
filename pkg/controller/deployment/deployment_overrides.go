@@ -181,7 +181,8 @@ func withPodSchedulingOverrideHook(certmanagerinformer certmanagerinformer.CertM
 // withProxyEnv patches the operand deployment if operator
 // has proxy variables set. Sets HTTPS_PROXY, HTTP_PROXY and NO_PROXY.
 func withProxyEnv(operatorSpec *operatorv1.OperatorSpec, deployment *appsv1.Deployment) error {
-	deployment.Spec.Template.Spec.Containers[0].Env = mergeContainerEnvs(deployment.Spec.Template.Spec.Containers[0].Env, proxy.ReadProxyVarsFromEnv())
+	// Keep explicit operand env overrides authoritative on key conflicts.
+	deployment.Spec.Template.Spec.Containers[0].Env = mergeContainerEnvs(proxy.ReadProxyVarsFromEnv(), deployment.Spec.Template.Spec.Containers[0].Env)
 	return nil
 }
 

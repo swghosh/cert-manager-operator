@@ -372,6 +372,67 @@ func TestMergeContainerArgs(t *testing.T) {
 	}
 }
 
+func TestWithProxyEnvPrecedence(t *testing.T) {
+	t.Setenv("HTTP_PROXY", "http://cluster-proxy:8080")
+	t.Setenv("HTTPS_PROXY", "https://cluster-proxy:8443")
+	t.Setenv("NO_PROXY", ".cluster.local,10.0.0.0/8")
+
+	tests := []struct {
+		name      string
+		sourceEnv []corev1.EnvVar
+		expected  map[string]string
+	}{
+		{
+			name: "user override proxy values win over cluster proxy env",
+			sourceEnv: []corev1.EnvVar{
+				{Name: "HTTP_PROXY", Value: "http://user-proxy:8080"},
+				{Name: "HTTPS_PROXY", Value: "https://user-proxy:8443"},
+				{Name: "NO_PROXY", Value: "localhost,127.0.0.1"},
+			},
+			expected: map[string]string{
+				"HTTP_PROXY":  "http://user-proxy:8080",
+				"HTTPS_PROXY": "https://user-proxy:8443",
+				"NO_PROXY":    "localhost,127.0.0.1",
+			},
+		},
+		{
+			name:      "cluster proxy env fills missing proxy values",
+			sourceEnv: []corev1.EnvVar{},
+			expected: map[string]string{
+				"HTTP_PROXY":  "http://cluster-proxy:8080",
+				"HTTPS_PROXY": "https://cluster-proxy:8443",
+				"NO_PROXY":    ".cluster.local,10.0.0.0/8",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			deployment := &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Env: tc.sourceEnv,
+							}},
+						},
+					},
+				},
+			}
+
+			require.NoError(t, withProxyEnv(nil, deployment))
+			actual := map[string]string{}
+			for _, env := range deployment.Spec.Template.Spec.Containers[0].Env {
+				actual[env.Name] = env.Value
+			}
+
+			require.Equal(t, tc.expected["HTTP_PROXY"], actual["HTTP_PROXY"])
+			require.Equal(t, tc.expected["HTTPS_PROXY"], actual["HTTPS_PROXY"])
+			require.Equal(t, tc.expected["NO_PROXY"], actual["NO_PROXY"])
+		})
+	}
+}
+
 func TestParseArgMap(t *testing.T) {
 	testArgs := []string{
 		"", // should be ignored at the time of parse
