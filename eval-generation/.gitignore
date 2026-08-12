@@ -1,0 +1,7 @@
+# Everything in eval-generation/ is local working state — never commit to operator repo.
+# After review, manually copy approved refined templates to openspec/schemas/.../templates/
+# Eval results are auto-synced to openspec/schemas/.../evals/ by the eval loop.
+*
+!.gitignore
+!input/
+!input/feature-bundle.yaml

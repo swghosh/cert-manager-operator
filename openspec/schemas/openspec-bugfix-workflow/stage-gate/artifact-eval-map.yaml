@@ -1,0 +1,91 @@
+# Maps openspec-bugfix-workflow artifact IDs → stage eval files (forward /opsx-continue gate)
+#
+# Generation templates: templates/ (via openspec instructions)
+# Eval rubrics: evals/<stage>_eval.yaml
+# Do NOT refine templates during forward workflow — refine the change artifact only.
+
+schema_templates_dir: templates/
+
+artifacts:
+  bug-validation:
+    stage: bug-validation
+    generates: bug-validation.json
+    schema_template: bug-validation-template.md
+    stage_eval_file: null
+    eval_spec: null
+    gate: rubric_only
+    note: Score against bug-validation-template.md rubric; no stage *_eval.yaml
+
+  bug-report:
+    stage: bug-report
+    generates: bug-report.md
+    schema_template: bug-report-template.md
+    stage_eval_file: evals/bug-report_eval.yaml
+    eval_spec: null
+    gate: stage_evals
+
+  repro-verification:
+    stage: repro-verification
+    generates: repro-verification-report.md
+    schema_template: repro-verification-template.md
+    stage_eval_file: evals/repro-verification_eval.yaml
+    eval_spec: null
+    gate: stage_evals
+
+  rca:
+    stage: rca
+    generates: rca-report.md
+    schema_template: rca-template.md
+    stage_eval_file: evals/rca_eval.yaml
+    eval_spec: null
+    gate: stage_evals
+
+  # constitution is not a generated artifact — it is an INPUT.
+  # See schema constitution_md for lookup order. Template retained at templates/constitution-template.md.
+
+  bugfix-plan:
+    stage: bugfix-plan
+    generates: bugfix-plan.md
+    schema_template: bugfix-plan-template.md
+    stage_eval_file: null
+    eval_spec: null
+    gate: skip
+    note: >-
+      Internal artifact generated silently after rca-report.md — no user
+      approval gate, no eval scorecard, no evaluation report. Feeds tasks.md
+      authoring only.
+
+  tasks:
+    stage: tasks
+    generates: tasks.md
+    schema_template: tasks-template.md
+    stage_eval_file: evals/tasks_eval.yaml
+    eval_spec: null
+    gate: stage_evals
+
+  implementation:
+    stage: implementation
+    stage_eval_file: null
+    eval_spec: null
+    gate: skip
+    note: >-
+      No stage eval file — per-task verification only (build/vet/test/make
+      targets from tasks.md §4 Acceptance criteria; see schema task_verification).
+
+  implementation-report:
+    gate: skip
+
+  deviation-observed:
+    gate: skip
+
+eval_results_dir: openspec/changes/<change-name>/eval-results/
+
+evaluation_reports:
+  enabled: true
+  output_dir: openspec/changes/<change-name>/
+  naming: "<artifact-id>_evaluation_report.md"
+  description: >-
+    After eval scoring (or rubric check), generate a structured evaluation report
+    that presents: eval pass/fail summary, gap analysis against input artifacts
+    and agents.md, and quality assessment. Present to user alongside the artifact
+    for approval.
