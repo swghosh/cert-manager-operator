@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/util/retry"
 
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -30,14 +31,14 @@ type ctrlClient interface {
 	Exists(context.Context, client.ObjectKey, client.Object) (bool, error)
 }
 
-func NewClient(m manager.Manager) (ctrlClient, error) {
-	c, err := BuildCustomClient(m)
+func NewClient(m manager.Manager) (ctrlClient, cache.Cache, error) {
+	c, customCache, err := BuildCustomClient(m)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build custom client: %w", err)
+		return nil, nil, fmt.Errorf("failed to build custom client: %w", err)
 	}
 	return &ctrlClientImpl{
 		Client: c,
-	}, nil
+	}, customCache, nil
 }
 
 func (c *ctrlClientImpl) Get(

@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/go-logr/logr"
 
@@ -46,6 +47,11 @@ var (
 type Reconciler struct {
 	ctrlClient
 
+	// cache is the label-filtered cache backing ctrlClient reads. It is also
+	// used as the event source for the primary IstioCSR watch so that reconcile
+	// events and reads are served by the same informer (see SetupWithManager).
+	cache cache.Cache
+
 	ctx           context.Context
 	eventRecorder record.EventRecorder
 	log           logr.Logger
@@ -58,12 +64,13 @@ type Reconciler struct {
 
 // New returns a new Reconciler instance.
 func New(mgr ctrl.Manager) (*Reconciler, error) {
-	c, err := NewClient(mgr)
+	c, customCache, err := NewClient(mgr)
 	if err != nil {
 		return nil, err
 	}
 	return &Reconciler{
 		ctrlClient:    c,
+		cache:         customCache,
 		ctx:           context.Background(),
 		eventRecorder: mgr.GetEventRecorderFor(ControllerName),
 		log:           ctrl.Log.WithName(ControllerName),
@@ -71,7 +78,7 @@ func New(mgr ctrl.Manager) (*Reconciler, error) {
 	}, nil
 }
 
-func BuildCustomClient(mgr ctrl.Manager) (client.Client, error) {
+func BuildCustomClient(mgr ctrl.Manager) (client.Client, cache.Cache, error) {
 	managedResourceLabelReq, _ := labels.NewRequirement(requestEnqueueLabelKey, selection.Equals, []string{requestEnqueueLabelValue})
 	managedResourceLabelReqSelector := labels.NewSelector().Add(*managedResourceLabelReq)
 
@@ -109,51 +116,51 @@ func BuildCustomClient(mgr ctrl.Manager) (client.Client, error) {
 	}
 	customCache, err := cache.New(mgr.GetConfig(), customCacheOpts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = customCache.GetInformer(context.Background(), &v1alpha1.IstioCSR{}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = customCache.GetInformer(context.Background(), &certmanagerv1.Certificate{}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = customCache.GetInformer(context.Background(), &appsv1.Deployment{}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = customCache.GetInformer(context.Background(), &rbacv1.ClusterRole{}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = customCache.GetInformer(context.Background(), &rbacv1.ClusterRoleBinding{}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = customCache.GetInformer(context.Background(), &rbacv1.Role{}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = customCache.GetInformer(context.Background(), &rbacv1.RoleBinding{}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = customCache.GetInformer(context.Background(), &corev1.Service{}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = customCache.GetInformer(context.Background(), &corev1.ServiceAccount{}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = customCache.GetInformer(context.Background(), &corev1.Secret{}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = customCache.GetInformer(context.Background(), &corev1.ConfigMap{}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = customCache.GetInformer(context.Background(), &certmanagerv1.Issuer{}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err = customCache.GetInformer(context.Background(), &certmanagerv1.ClusterIssuer{}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	err = mgr.Add(customCache)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	customClient, err := client.New(mgr.GetConfig(), client.Options{
@@ -165,10 +172,10 @@ func BuildCustomClient(mgr ctrl.Manager) (client.Client, error) {
 		},
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return customClient, nil
+	return customClient, customCache, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -234,9 +241,25 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	controllerWatchResourcePredicates := builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}, controllerWatchResources)
 	controllerManagedResourcePredicates := builder.WithPredicates(controllerManagedResources)
 
+	// Source the primary IstioCSR watch from the same custom cache that backs
+	// the reconciler's reads (r.Get), instead of the manager's default cache
+	// used by For(). Using two independent informers for the same resource
+	// caused a race: the manager cache could enqueue a reconcile for a freshly
+	// created IstioCSR before the custom cache observed it, so r.Get returned
+	// NotFound and reconciliation was skipped with no requeue, leaving the CR
+	// with an empty status and no deployment until the operator pod restarted.
+	// Sharing a single informer guarantees the object is present in the cache
+	// whenever its create/update event triggers a reconcile.
+	istiocsrSource := source.Kind(
+		r.cache,
+		&v1alpha1.IstioCSR{},
+		&handler.TypedEnqueueRequestForObject[*v1alpha1.IstioCSR]{},
+		predicate.TypedGenerationChangedPredicate[*v1alpha1.IstioCSR]{},
+	)
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.IstioCSR{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named(ControllerName).
+		WatchesRawSource(istiocsrSource).
 		Watches(&certmanagerv1.Certificate{}, handler.EnqueueRequestsFromMapFunc(mapFunc), withIgnoreStatusUpdatePredicates).
 		Watches(&appsv1.Deployment{}, handler.EnqueueRequestsFromMapFunc(mapFunc), withIgnoreStatusUpdatePredicates).
 		Watches(&rbacv1.ClusterRole{}, handler.EnqueueRequestsFromMapFunc(mapFunc), controllerManagedResourcePredicates).
