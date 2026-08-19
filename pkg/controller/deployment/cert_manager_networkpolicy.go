@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -133,12 +134,15 @@ func (c *CertManagerNetworkPolicyUserDefinedController) sync(ctx context.Context
 	}
 
 	// Apply user-defined network policies
-	if err := c.reconcileUserNetworkPolicies(ctx, certManager); err != nil {
+	changed, err := c.reconcileUserNetworkPolicies(ctx, certManager)
+	if err != nil {
 		c.eventRecorder.Warningf("UserNetworkPolicyReconcileFailed", "Failed to reconcile user network policies: %v", err)
 		return fmt.Errorf("failed to reconcile user network policies: %w", err)
 	}
 
-	c.eventRecorder.Event("UserNetworkPolicyReconcileSuccess", "Successfully reconciled user-defined network policies")
+	if changed {
+		c.eventRecorder.Event("UserNetworkPolicyReconcileSuccess", "Successfully reconciled user-defined network policies")
+	}
 	return nil
 }
 
@@ -165,16 +169,21 @@ func (c *CertManagerNetworkPolicyUserDefinedController) validateComponentName(co
 	}
 }
 
-func (c *CertManagerNetworkPolicyUserDefinedController) reconcileUserNetworkPolicies(ctx context.Context, certManager *v1alpha1.CertManager) error {
+func (c *CertManagerNetworkPolicyUserDefinedController) reconcileUserNetworkPolicies(ctx context.Context, certManager *v1alpha1.CertManager) (bool, error) {
+	changed := false
 	// Apply each user-defined network policy
 	for _, userPolicy := range certManager.Spec.NetworkPolicies {
 		policy := c.createUserNetworkPolicy(userPolicy)
-		if err := c.createOrUpdateNetworkPolicy(ctx, policy); err != nil {
-			return fmt.Errorf("failed to create/update user network policy %s: %w", policy.Name, err)
+		policyChanged, err := c.createOrUpdateNetworkPolicy(ctx, policy)
+		if err != nil {
+			return changed, fmt.Errorf("failed to create/update user network policy %s: %w", policy.Name, err)
+		}
+		if policyChanged {
+			changed = true
 		}
 	}
 
-	return nil
+	return changed, nil
 }
 
 func (c *CertManagerNetworkPolicyUserDefinedController) createUserNetworkPolicy(userPolicy v1alpha1.NetworkPolicy) *networkingv1.NetworkPolicy {
@@ -227,30 +236,32 @@ func (c *CertManagerNetworkPolicyUserDefinedController) getPodSelectorForCompone
 	}
 }
 
-func (c *CertManagerNetworkPolicyUserDefinedController) createOrUpdateNetworkPolicy(ctx context.Context, policy *networkingv1.NetworkPolicy) error {
+func (c *CertManagerNetworkPolicyUserDefinedController) createOrUpdateNetworkPolicy(ctx context.Context, policy *networkingv1.NetworkPolicy) (bool, error) {
 	existing, err := c.kubeClient.NetworkingV1().NetworkPolicies(policy.Namespace).Get(ctx, policy.Name, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Create new policy
 			_, err := c.kubeClient.NetworkingV1().NetworkPolicies(policy.Namespace).Create(ctx, policy, metav1.CreateOptions{})
 			if err != nil {
-				return fmt.Errorf("failed to create network policy: %w", err)
+				return false, fmt.Errorf("failed to create network policy: %w", err)
 			}
 			c.eventRecorder.Eventf("NetworkPolicyCreated", "Created user-defined network policy %s", policy.Name)
-			return nil
+			return true, nil
 		}
-		return fmt.Errorf("failed to get existing network policy: %w", err)
+		return false, fmt.Errorf("failed to get existing network policy: %w", err)
 	}
 
-	// Update existing policy
+	if equality.Semantic.DeepEqual(existing.Spec, policy.Spec) &&
+		equality.Semantic.DeepEqual(existing.Labels, policy.Labels) {
+		return false, nil
+	}
+
 	existing.Spec = policy.Spec
 	existing.Labels = policy.Labels
 	_, err = c.kubeClient.NetworkingV1().NetworkPolicies(policy.Namespace).Update(ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to update network policy: %w", err)
+		return false, fmt.Errorf("failed to update network policy: %w", err)
 	}
 
 	c.eventRecorder.Eventf("NetworkPolicyUpdated", "Updated user-defined network policy %s", policy.Name)
-
-	return nil
+	return true, nil
 }
